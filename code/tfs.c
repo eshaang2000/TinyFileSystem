@@ -140,7 +140,7 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 int tfs_mkfs() {
 
 	// Call dev_init() to initialize (Create) Diskfile
-
+	dev_init(diskfile_path);
 	// write superblock information
 
 	// initialize inode bitmap
@@ -150,6 +150,7 @@ int tfs_mkfs() {
 	// update bitmap information for root directory
 
 	// update inode for root directory
+	// printf("Eshaan is the best\n");
 
 	return 0;
 }
@@ -158,13 +159,13 @@ int tfs_mkfs() {
 /* 
  * FUSE file operations
  */
-static void *tfs_init(struct fuse_conn_info *conn) {
-
+static void *tfs_init() {
+//struct fuse_conn_info *conn
 	// Step 1a: If disk file is not found, call mkfs
-
   // Step 1b: If disk file is found, just initialize in-memory data structures
   // and read superblock from disk
-
+  	tfs_mkfs();
+	printf("Eshaan is the best\n");
 	return NULL;
 }
 
@@ -222,7 +223,7 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 
 	// Step 6: Call writei() to write inode to disk
 	
-
+	printf("Eshaan\n");
 	return 0;
 }
 
@@ -368,7 +369,7 @@ static struct fuse_operations tfs_ope = {
 
 int main(int argc, char *argv[]) {
 	int fuse_stat;
-
+	printf("This is how you start\n");
 	getcwd(diskfile_path, PATH_MAX);
 	strcat(diskfile_path, "/DISKFILE");
 
