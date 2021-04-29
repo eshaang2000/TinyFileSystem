@@ -23,7 +23,11 @@
 #include "tfs.h"
 
 char diskfile_path[PATH_MAX];
+struct superblock* superBlock;//Represnts the inmemory superblock
+char* inode_bitmap;
+char* data_bitmap;
 
+struct superblock* s;
 // Declare your in-memory data structures here
 
 /* 
@@ -32,8 +36,12 @@ char diskfile_path[PATH_MAX];
 int get_avail_ino() {
 
 	// Step 1: Read inode bitmap from disk
+	/* 
+	1. You need to know where the inode bitmap is and then call bioread */
 	
 	// Step 2: Traverse inode bitmap to find an available slot
+	/* 
+	1. This is pretty easy */
 
 	// Step 3: Update inode bitmap and write to disk 
 
@@ -140,18 +148,54 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 int tfs_mkfs() {
 
 	// Call dev_init() to initialize (Create) Diskfile
-	dev_init(diskfile_path);
+	dev_init(diskfile_path); // this initialzes our "disk" - should create a diskfile
+	dev_open(diskfile_path); // opens the disk though we didn't need to do this
+
 	// write superblock information
 
+	/* 
+	1. space for the superblock is there on the diskfile
+	2. Set the memory as that
+	3. Put all the stuff in that would need to be copied */
+	
+	superBlock = malloc(sizeof(struct superblock)); //maybe we can make 
+	superBlock->magic_num = MAGIC_NUM;
+	superBlock->max_inum = MAX_INUM;
+	superBlock->max_dnum = MAX_DNUM;
+	superBlock->i_bitmap_blk = 1;
+	superBlock->d_bitmap_blk = 2;
+	superBlock->i_start_blk = 3;
+	//we need to calculate how many blocks we need for inodes
+	/* The size of one inode is 256 Bytes and there are 1024 no of inodes. Ofc this can easily be changed. So going to do the calculation now */
+	int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE;
+	printf("The size of one inode is %d\n", n);
+	superBlock->d_start_blk = 3+n;
+
+	int a = bio_write(0, superBlock); //0th block to the superblock
+	if(a<=0){
+		perror("No bytes were read\n");
+	}
+
+	//write to the disk compelete
+
 	// initialize inode bitmap
-
+	inode_bitmap = malloc(superBlock->max_inum*sizeof(char));//have to memset
+	memset(inode_bitmap, 0, superBlock->max_inum);
+	a = bio_write(superBlock->i_bitmap_blk, inode_bitmap);
+	if(a<=0){
+		perror("No bytes were read\n");
+	}
 	// initialize data block bitmap
+	data_bitmap = malloc(superBlock->max_dnum*sizeof(char));//have to memset
+	memset(data_bitmap, 0, superBlock->max_dnum);
+	a = bio_write(superBlock->d_bitmap_blk, data_bitmap);
+	if(a<=0){
+		perror("No bytes were read\n");
+	}
+	
+	// update bitmap information for root directory - no idea
 
-	// update bitmap information for root directory
-
-	// update inode for root directory
-	// printf("Eshaan is the best\n");
-
+	// update inode for root directory - no idea
 	return 0;
 }
 
@@ -164,8 +208,12 @@ static void *tfs_init() {
 	// Step 1a: If disk file is not found, call mkfs
   // Step 1b: If disk file is found, just initialize in-memory data structures
   // and read superblock from disk
+
+  if(dev_open(diskfile_path)!=0){ //maybe check this
+	printf("The disk was created\n");
   	tfs_mkfs();
-	printf("Eshaan is the best\n");
+  }
+  /* What are the in-memory data structures that we would like to initialize */
 	return NULL;
 }
 
@@ -174,6 +222,7 @@ static void tfs_destroy(void *userdata) {
 	// Step 1: De-allocate in-memory data structures
 
 	// Step 2: Close diskfile
+	dev_close();
 
 }
 
@@ -223,7 +272,6 @@ static int tfs_mkdir(const char *path, mode_t mode) {
 
 	// Step 6: Call writei() to write inode to disk
 	
-	printf("Eshaan\n");
 	return 0;
 }
 
@@ -371,10 +419,14 @@ int main(int argc, char *argv[]) {
 	int fuse_stat;
 	printf("This is how you start\n");
 	getcwd(diskfile_path, PATH_MAX);
+	// char* a = malloc(PATH_MAX);
+	// strcpy(a, diskfile_path);
+	// strcat(a, "/output.txt");
+    // fd = open(a, O_WRONLY | O_APPEND | O_CREAT, 0644);
+	// printf("Proof that the output file was created %d\n", fd);
 	strcat(diskfile_path, "/DISKFILE");
 
 	fuse_stat = fuse_main(argc, argv, &tfs_ope, NULL);
-
 	return fuse_stat;
 }
 
