@@ -44,19 +44,18 @@ int get_avail_ino() {
 	3. Then get the inode bitmap block
 	4. traverse the inode
 	5. return the i*/
-	struct superblock* superBlock1 = malloc(sizeof(struct superblock));
-	bitmap_t inode_bitmap1 = malloc(superBlock1->max_inum*sizeof(char)); 
+	int a;
 
-	int a = bio_read(superBlockblock, superBlock1);
-	if(a<0){
-		perror("Problem reading into the supernode");
-	}
-	a = bio_read(superBlock1->i_bitmap_blk, inode_bitmap1); //this the problem
-	// free(data_bitmap);
-	if(a<0){
-		printf("Problem reading into the inode");
-		perror("Problem reading into the inode");
-	}
+	// a = bio_read(superBlockblock, superBlock);
+	// if(a<0){
+	// 	perror("Problem reading into the supernode");
+	// }
+	// a = bio_read(superBlock1->i_bitmap_blk, inode_bitmap); //this the problem
+	// // free(data_bitmap);
+	// if(a<0){
+	// 	printf("Problem reading into the inode");
+	// 	perror("Problem reading into the inode");
+	// }
 	
 	// Step 2: Traverse inode bitmap to find an available slot
 	/* 
@@ -64,25 +63,22 @@ int get_avail_ino() {
 
 	int i; 
 
-	for(i=0; i<superBlock1->max_inum; i++){
-		if(get_bitmap(inode_bitmap1, i)==0){
-			// inode_bitmap1[i] = 1;
-			set_bitmap(inode_bitmap1, i);
+	for(i=0; i<superBlock->max_inum; i++){
+		if(get_bitmap(inode_bitmap, i)==0){
+			set_bitmap(inode_bitmap, i);
 			break;
 		}
 	}
-	if(i == superBlock1->max_inum){
+	if(i == superBlock->max_inum){
 		perror("No available inodes");
 		return -1;
 	}
 	// Step 3: Update inode bitmap and write to disk 
-	a = bio_write(superBlock1->i_bitmap_blk, inode_bitmap1);
-	if(a<0){
-		printf("Problem wriring into the inode");
-		perror("Problem wriitn into the inode");
-	}
-	free(superBlock1);
-	free(inode_bitmap1);
+	// a = bio_write(superBlock->i_bitmap_blk, inode_bitmap);
+	// if(a<0){
+	// 	printf("Problem wriring into the inode");
+	// 	perror("Problem wriitn into the inode");
+	// }
 	return i;
 }
 
@@ -92,7 +88,7 @@ int get_avail_ino() {
 int get_avail_blkno() {
 
 	// Step 1: Read data block bitmap from disk
-	printf("Getting into the get_avail_blno method\n");
+	printf("Getting into the get_avail_blkno method\n");
 
 	// Step 1: Read inode bitmap from disk
 	/* 
@@ -101,18 +97,17 @@ int get_avail_blkno() {
 	3. Then get the inode bitmap block
 	4. traverse the inode
 	5. return the i*/
-	struct superblock* superBlock1 = malloc(sizeof(struct superblock));
-	bitmap_t data_bitmap1 = malloc(superBlock1->max_dnum*sizeof(char)); 
-	int a = bio_read(superBlockblock, superBlock1);
-	if(a<0){
-		perror("Problem reading into the supernode");
-	}
-	a = bio_read(superBlock1->d_bitmap_blk, data_bitmap1); //this the problem
-	// free(data_bitmap);
-	if(a<0){
-		printf("Problem reading into the data");
-		perror("Problem reading into the data");
-	}
+	int a;
+	// a = bio_read(superBlockblock, superBlock);
+	// if(a<0){
+	// 	perror("Problem reading into the supernode");
+	// }
+	// a = bio_read(superBlock->d_bitmap_blk, data_bitmap); //this the problem
+	// // free(data_bitmap);
+	// if(a<0){
+	// 	printf("Problem reading into the data");
+	// 	perror("Problem reading into the data");
+	// }
 	
 	// Step 2: Traverse inode bitmap to find an available slot
 	/* 
@@ -120,25 +115,25 @@ int get_avail_blkno() {
 
 	int i; 
 
-	for(i=0; i<superBlock1->max_dnum; i++){
-		if(get_bitmap(data_bitmap1, i)==0){
+	for(i=0; i<superBlock->max_dnum; i++){
+		if(get_bitmap(data_bitmap, i)==0){
 			// inode_bitmap1[i] = 1;
-			set_bitmap(data_bitmap1, i);
+			set_bitmap(data_bitmap, i);
 			break;
 		}
 	}
-	if(i == superBlock1->max_dnum){
+	if(i == superBlock->max_dnum){
 		perror("No available data bloces");
 		return -1;
 	}
 	// Step 3: Update inode bitmap and write to disk 
-	a = bio_write(superBlock1->d_bitmap_blk, data_bitmap1);
-	if(a<0){
-		printf("Problem wriring into the data");
-		perror("Problem wriitn into the data");
-	}
+	// a = bio_write(superBlock1->d_bitmap_blk, data_bitmap1);
+	// if(a<0){
+	// 	printf("Problem wriring into the data");
+	// 	perror("Problem wriitn into the data");
+	// }
 	// free(data_bitmap1);
-	free(superBlock1);
+	// free(superBlock);
 	return i;
 	// Step 2: Traverse data block bitmap to find an available slot
 
@@ -255,30 +250,36 @@ int tfs_mkfs() {
 
 	//superblock infomration done
 
-	int a = bio_write(0, superBlock); //0th block to the superblock
-	if(a<=0){
-		perror("No bytes were written\n");
-		return -1;
-	}
+	int a;
+	// a = bio_write(0, superBlock); //0th block to the superblock
+	// if(a<=0){
+	// 	perror("No bytes were written\n");
+	// 	return -1;
+	// }
 
 	//write to the disk compelete
 
 	// initialize inode bitmap
 	inode_bitmap = malloc((superBlock->max_inum)*sizeof(char));//have to memset
 	memset(inode_bitmap, 0, superBlock->max_inum);
-	a = bio_write(superBlock->i_bitmap_blk, inode_bitmap);
-	if(a<=0){
-		perror("No bytes were read\n");
-		return -1;
-	}
+
+
+	// a = bio_write(superBlock->i_bitmap_blk, inode_bitmap);
+	// if(a<=0){
+	// 	perror("No bytes were read\n");
+	// 	return -1;
+	// }
 	// initialize data block bitmap
 	data_bitmap = malloc((superBlock->max_dnum)*sizeof(char));//have to memset
 	memset(data_bitmap, 0, superBlock->max_dnum);
-	a = bio_write(superBlock->d_bitmap_blk, data_bitmap);
-	if(a<=0){
-		perror("No bytes were read\n");
-		return -1;
-	}
+
+	// a = bio_write(superBlock->d_bitmap_blk, data_bitmap);
+	// if(a<=0){
+	// 	perror("No bytes were read\n");
+	// 	return -1;
+	// }
+
+
 	// update bitmap information for root directory
 	/* inode for the root directory. The first inode is for the root directory. 
 	Use the set inode function to do this. make that
@@ -288,15 +289,19 @@ int tfs_mkfs() {
 	int nextAvail = get_avail_ino(); //Gets the next avaiable inode. the root directory was updated
 	printf("This is the first available inode %d\n", nextAvail);
 	nextAvail = get_avail_blkno(); //Gets the next avaiable inode. the root directory was updated
-	printf("This is the first available inode %d\n", nextAvail);
+	printf("This is the first available block no %d\n", nextAvail);
 	nextAvail = get_avail_blkno(); //Gets the next avaiable inode. the root directory was updated
-	printf("This is the first available inode %d\n", nextAvail);
+	printf("This is the 2d avaible available block %d\n", nextAvail);
+
+
 	struct inode* rootDir = malloc(sizeof(struct inode));
 	rootDir->ino = nextAvail;
 	rootDir->valid = 0;
 	rootDir->size = 0;
 	rootDir->type = 0;
 	rootDir->link = 0;
+
+
 	int i;
 	for(i=0; i<sizeof(rootDir->direct_ptr)/sizeof(rootDir->direct_ptr[0]); i++){
 		rootDir->direct_ptr[i] = 0;
@@ -305,7 +310,7 @@ int tfs_mkfs() {
 		rootDir->indirect_ptr[i] = 0;
 	}
 	// free(data_bitmap);
-	free(superBlock);
+	// free(superBlock);
 	printf("Free successful\n");
 	// update inode for root directory - no idea - just update the proerties. 
 	
@@ -331,28 +336,28 @@ static void *tfs_init() {
   malloc bitmaps
   in emort inode
   */
- 	superBlock = malloc(sizeof(superBlock));
-	if(superBlock == NULL){
-		printf("Superblock memory alloc failed\n");
-	}
-	else{
-		printf("Successful alloc 1\n");
-	}
-	inode_bitmap = malloc(superBlock->max_inum);
-	if(inode_bitmap == NULL){
-		printf("inode_bitmap memory alloc failed\n");
-	}
-	else{
-		printf("Successful alloc 2\n");
-	}
-	data_bitmap = malloc(superBlock->max_dnum); //char is 1 byte anyways
-	if(data_bitmap == NULL){
-		printf("data_bitmap memory alloc failed\n");
-	}
-	else{
-		printf("Successful alloc 3\n");
-	}
-	inode_mem = malloc(sizeof(struct inode));
+ 	// superBlock = malloc(sizeof(superBlock));
+	// if(superBlock == NULL){
+	// 	printf("Superblock memory alloc failed\n");
+	// }
+	// else{
+	// 	printf("Successful alloc 1\n");
+	// }
+	// inode_bitmap = malloc(superBlock->max_inum);
+	// if(inode_bitmap == NULL){
+	// 	printf("inode_bitmap memory alloc failed\n");
+	// }
+	// else{
+	// 	printf("Successful alloc 2\n");
+	// }
+	// data_bitmap = malloc(superBlock->max_dnum); //char is 1 byte anyways
+	// if(data_bitmap == NULL){
+	// 	printf("data_bitmap memory alloc failed\n");
+	// }
+	// else{
+	// 	printf("Successful alloc 3\n");
+	// }
+	// inode_mem = malloc(sizeof(struct inode));
 	return NULL;
 }
 
