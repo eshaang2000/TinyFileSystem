@@ -146,20 +146,43 @@ int get_avail_blkno() {
 int readi(uint16_t ino, struct inode *inode) {
 
   // Step 1: Get the inode's on-disk block number
-
+  /* 
+  a. divide by total block nums to get the numeber of blcoks
+  b. Then modulo it to find which one  */
+  if(ino >= MAX_INUM){
+	  perror("Invalid ino number\n");
+	  return -1;
+  }
+  int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE; //total no of blocks
+  int inodesInEach = MAX_INUM/n;
+  int blockNo = ino/inodesInEach;
+  printf("The block number is %d\n", blockNo);
+  ino = ino%inodesInEach;
   // Step 2: Get offset of the inode in the inode on-disk block
 
-  // Step 3: Read the block from disk and then copy into inode structure
+//   int offset = ino%sizeof(struct inode);
+  int offset = ino;
+  printf("The offset is %d\n", offset);
 
-	return 0;
+  // Step 3: Read the block from disk and then copy into inode structure
+  return 0;
 }
 
 int writei(uint16_t ino, struct inode *inode) {
 
 	// Step 1: Get the block number where this inode resides on disk
-	
+	if(ino >= MAX_INUM){
+	  perror("Invalid ino number\n");
+	  return -1;
+  	}
+  	int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE; //total no of blocks
+  	int inodesInEach = MAX_INUM/n;
+  	int blockNo = ino/inodesInEach;
+  	printf("The block number is %d\n", blockNo);
+  	ino = ino%inodesInEach;
 	// Step 2: Get the offset in the block where this inode resides on disk
-
+	int offset = ino;
+  	printf("The offset is %d\n", offset);
 	// Step 3: Write inode to disk 
 
 	return 0;
@@ -246,8 +269,8 @@ int tfs_mkfs() {
 	//we need to calculate how many blocks we need for inodes
 	/* The size of one inode is 256 Bytes and there are 1024 no of inodes. Ofc this can easily be changed. So going to do the calculation now */
 	int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE;
-	superBlock->d_start_blk = superBlock->d_bitmpa_blk+n;
-
+	superBlock->d_start_blk = superBlock->d_bitmap_blk+n;
+	printf("The number of inode blocks are %d\n", n);
 	//superblock infomration done
 
 	int a;
@@ -284,16 +307,13 @@ int tfs_mkfs() {
 	/* inode for the root directory. The first inode is for the root directory. 
 	Use the set inode function to do this. make that
 	1. Make an inode. Initialize all attributes. Write to the disk drive. The zeroth entry in the table would be the roor directot */
+
+	int nextAvail = get_avail_ino();
+	if(nextAvail < 0){
+		perror("No avaialable inode");
+		return -1;
+	}
 	
-
-	int nextAvail = get_avail_ino(); //Gets the next avaiable inode. the root directory was updated
-	printf("This is the first available inode %d\n", nextAvail);
-	nextAvail = get_avail_blkno(); //Gets the next avaiable inode. the root directory was updated
-	printf("This is the first available block no %d\n", nextAvail);
-	nextAvail = get_avail_blkno(); //Gets the next avaiable inode. the root directory was updated
-	printf("This is the 2d avaible available block %d\n", nextAvail);
-
-
 	struct inode* rootDir = malloc(sizeof(struct inode));
 	rootDir->ino = nextAvail;
 	rootDir->valid = 0;
@@ -358,6 +378,11 @@ static void *tfs_init() {
 	// 	printf("Successful alloc 3\n");
 	// }
 	// inode_mem = malloc(sizeof(struct inode));
+	readi(18, NULL);
+	readi(1023, NULL);
+	readi(1024, NULL);
+	readi(0, NULL);
+	
 	return NULL;
 }
 
