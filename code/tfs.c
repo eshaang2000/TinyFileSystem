@@ -123,7 +123,7 @@ int get_avail_blkno() {
 		}
 	}
 	if(i == superBlock->max_dnum){
-		perror("No available data bloces");
+		perror("No available data blocks");
 		return -1;
 	}
 	// Step 3: Update inode bitmap and write to disk 
@@ -228,7 +228,7 @@ int tfs_mkfs() {
 	// Call dev_init() to initialize (Create) Diskfile
 	dev_init(diskfile_path); // this initialzes our "disk" - should create a diskfile
 	dev_open(diskfile_path); // opens the disk though we didn't need to do this
-
+	void* buffer; // buffer to put stuff in
 	// write superblock information
 
 	/* 
@@ -246,7 +246,7 @@ int tfs_mkfs() {
 	//we need to calculate how many blocks we need for inodes
 	/* The size of one inode is 256 Bytes and there are 1024 no of inodes. Ofc this can easily be changed. So going to do the calculation now */
 	int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE;
-	superBlock->d_start_blk = 3+n;
+	superBlock->d_start_blk = superBlock->d_bitmpa_blk+n;
 
 	//superblock infomration done
 
