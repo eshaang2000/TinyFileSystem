@@ -84,7 +84,7 @@ int writei(uint16_t ino, struct inode *inode) {
   struct inode *ptr = (struct inode) buf;
   ptr += inode_num;
   *ptr = *inode;  
-  
+  bio_write(i_block_num, buf);
   return 0;
 }
 
@@ -95,8 +95,7 @@ int writei(uint16_t ino, struct inode *inode) {
 int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *dirent) {
 
   // Step 1: Call readi() to get the inode using ino (inode number of current directory)
-  struct inode i_node;
-  readi(ino, &i_node);
+
   // Step 2: Get data block of current directory from inode
   //directory inode type = 1, else = 0
  
@@ -104,9 +103,16 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
   //If the name matches, then copy directory entry to dirent structure
 
   struct dirent *de;
+  struct inode i_node;
   void *buffer;
   int i, j;
+
+  readi(ino, &i_node);
+  
   for(i = 0; i < 16; i++){
+    if(i_node->direct_ptr[i] == -1){//Not sure if need this
+      continue;
+    }
     bio_read(superBlock->d_start_blk + i_node->direct_ptr[i], buffer);
     de = (struct dirent) buffer;
     for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
@@ -134,15 +140,14 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
   // Update directory inode
 
   // Write directory entry
-
+  void *buffer;
+  int i, j, blk_num_i;//index of direct_ptr in inode where the valid dirent is in
   struct dirent *save, *de, *new = malloc(sizeof(struct dirent));//save will point to the first valid dirent in the direct_ptr in inode
   new->ino = f_ino;
   new->name = fname;
   new->len = name_len;
   new->valid = 1;
-  void *buffer;
-  int i, j;
-  uint32_t blk_num_i;//index of direct_ptr in inode where the valid dirent is in
+  
   for(i = 0; i < 16; i++){
     bio_read(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
     de = (struct dirent) buffer;
@@ -151,8 +156,8 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
 	//Found a match, can't add
 	return -1;
       }
-      if(!de->valid){
-	blk_num_i = i;
+      if(!(de->valid)){
+	blk_num_i = dir_inode->direct_ptr[i];
 	save = de;
       }
       de++;
@@ -161,6 +166,7 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
   
   *save = *new;
   bio_write(superBlock->d_start_blk + dir_inode->direct_ptr[blk_num_i], buffer);//writes updated data block to disk
+  /*End of Step 3*/
   struct inode temp;
   readi(new->ino, &temp);
   temp->direct_ptr[0] = get_avail_blkno();
@@ -193,7 +199,7 @@ int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
     }
   }	
 
-	return 0;
+  return 0;
 }
 
 /* 
@@ -203,7 +209,11 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 	
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
+  if(){
 
+  }
+  const char s[2] = "/";
+  
 	return 0;
 }
 
