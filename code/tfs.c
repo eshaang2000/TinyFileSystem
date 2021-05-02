@@ -82,6 +82,7 @@ int get_avail_ino() {
         perror("No available inodes");
         return -1;
     }
+    
     // Step 3: Update inode bitmap and write to disk 
     buffer = memcpy(buffer, (void * ) inode_bitmap, sizeof( * inode_bitmap));
     a = bio_write(superBlock -> i_bitmap_blk, buffer);
@@ -167,9 +168,16 @@ int readi(uint16_t ino, struct inode * inode) {
     printf("The offset is %d\n", offset);
 
     // Step 3: Read the block from disk and then copy into inode structure
-    void * buffer = malloc(BLOCK_SIZE);
     int a; // to check if bio_read operations happened or not
-    a = bio_read(blockNo, buffer);
+    void* buffer = malloc(BLOCK_SIZE);
+    a = bio_read(0, buffer);
+    if (a < 0) {
+        perror("Problem reading into the supernode");
+        return -1;
+    }
+    superBlock -> magic_num = 77;
+    superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
+    a = bio_read(superBlock->i_start_blk+blockNo, buffer);
     if (a < 0) {
         perror("Read not succesful");
         free(buffer);
@@ -198,11 +206,18 @@ int writei(uint16_t ino, struct inode * inode) {
     // Step 3: Write inode to disk 
 
     void * buffer = malloc(BLOCK_SIZE);
+    int a; // to check if bio_read operations happened or not
+    a = bio_read(0, buffer);
+    if (a < 0) {
+        perror("Problem reading into the supernode");
+        return -1;
+    }
+    superBlock -> magic_num = 77;
+    superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
     int o = sizeof(struct inode) * offset; // this tells me where to memcpy from
     void * tempBuf = NULL;
     tempBuf = memcpy(buffer + o, inode, sizeof(struct inode));
-    int a; // to check if bio_read operations happened or not
-    a = bio_write(blockNo, buffer);
+    a = bio_write(superBlock->i_start_blk+blockNo, buffer);
     if (a < 0) {
         perror("Read not succesful");
         return -1;
@@ -219,29 +234,37 @@ int dir_find(uint16_t ino,
     const char * fname, size_t name_len, struct dirent * dirent) {
     
     // Step 1: Call readi() to get the inode using ino (inode number of current directory)
-    struct dirent *de;
+    struct dirent *de; //directory pointer
     struct inode *i_node; //changed into into a pointer
+    i_node = malloc(sizeof(struct inode));
     void *buffer; //need to allocate space for the buffer
+    buffer = malloc(BLOCK_SIZE);
     int i, j, a; // a is for checking if readi did its job
     a = readi(ino, i_node); //i_node has the inode for the directory we are in 
     if(a == -1){
         printf("Readi problem");
         return -1;
-    }//This means we did not find the directoru
+    }//This means we did not find the directory
 
     
     for(i = 0; i < 16; i++){
         if(i_node->direct_ptr[i] == -1){//Not sure if need this
         continue;
         }
-        bio_read(superBlock->d_start_blk + i_node->direct_ptr[i], buffer);
-        de = (struct dirent) buffer;
+        bio_read(superBlock->d_start_blk + i_node->direct_ptr[i], buffer); //allpca
+        de = (struct dirent*) buffer;//have to memcpy - 
+        /* 
+        1. Figure out how many dirents in the buffer
+        2. Figure out the size of each dirent
+        3. Iterate through the whole thing
+        4. Compare if the name is found
+         */
         for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
-        if(!strcmp(fname, de->name)){
-        //Found a match, copy to *dirent
-            *dirent = *de;
-        return 0;
-        }
+            if(!strcmp(fname, de->name)){
+            //Found a match, copy to *dirent
+                *dirent = *de;
+                return 0;
+            }
         de++;
         }
     }
@@ -269,6 +292,39 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char * fname, size_t n
     // Update directory inode
 
     // Write directory entry
+    void *buffer = malloc(BLOCK_SIZE);
+    int i, j, blk_num_i;//index of direct_ptr in inode where the valid dirent is in
+    struct dirent *save, *de;
+    struct dirent *new = malloc(sizeof(struct dirent));//save will point to the first valid dirent in the direct_ptr in inode
+    new->ino = f_ino;
+    new->name = fname; // str cpy
+    new->len = name_len;
+    new->valid = 1;
+  
+  for(i = 0; i < 16; i++){
+    bio_read(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
+    de = (struct* dirent) buffer;
+    for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){ //similar things
+      if(!strcmp(fname, de->name)){
+	//Found a match, can't add
+	return -1;
+      }
+      if(!(de->valid)){
+	blk_num_i = dir_inode->direct_ptr[i];
+	save = de;
+      }
+      de++;
+    }
+  }
+  
+  *save = *new;
+  bio_write(superBlock->d_start_blk + dir_inode->direct_ptr[blk_num_i], buffer);//writes updated data block to disk
+  /*End of Step 3*/
+  struct inode temp;
+  readi(new->ino, &temp);
+  temp->direct_ptr[0] = get_avail_blkno();
+  writei(temp->ino, &temp);
+  return 0;
 
     return 0;
 }
@@ -280,8 +336,24 @@ int dir_remove(struct inode dir_inode, const char * fname, size_t name_len) {
     // Step 2: Check if fname exist
 
     // Step 3: If exist, then remove it from dir_inode's data block and write to disk
+ struct dirent *de;
+  void *buffer;
+  int i, j;
+  for(i = 0; i < 16; i++){
+    bio_read(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
+    de = (struct dirent) buffer; //fix this
+    for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
+      if(!strcmp(fname, de->name)){
+	//Found a match
+	de->valid = 0;
+	bio_write(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
+	return 1;
+      }
+      de++;
+    }
+  }	
 
-    return 0;
+  return 0;
 }
 
 /* 
@@ -292,7 +364,28 @@ int get_node_by_path(const char * path, uint16_t ino, struct inode * inode) {
     // Step 1: Resolve the path name, walk through path, and finally, find its inode.
     // Note: You could either implement it in a iterative way or recursive way
 
-    return 0;
+
+  readi(ino, inode);
+  if(strlen(path) == 1){
+    //It's the root directory
+    return 1;
+  }
+  
+  const char s[2] = "/";
+  char* token;
+  struct dirent *de;
+  token = strtok(path, s);
+
+  while(token){
+    if(dir_find(inode->ino, token, strlen(token), de)){
+      //invalid path
+      inode = NULL;
+      return -1;
+    }
+    token = strtok(NULL, s);
+  }
+  readi(de->ino, inode);
+  return 2;
 }
 
 /* 
