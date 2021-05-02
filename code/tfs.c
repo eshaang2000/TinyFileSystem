@@ -119,12 +119,12 @@ int dir_find(uint16_t ino, const char *fname, size_t name_len, struct dirent *di
       if(!strcmp(fname, de->name)){
 	//Found a match, copy to *dirent
         *dirent = *de;
-	return 1;
+	return 0;
       }
       de++;
     }
   }
-  return 0;
+  return -1;
 }
 
 int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t name_len) {
@@ -209,12 +209,28 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 	
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
-  if(){
 
+
+  readi(ino, inode);
+  if(strlen(path) == 1){
+    //It's the root directory
+    return 1;
   }
-  const char s[2] = "/";
   
-	return 0;
+  const char s[2] = "/";
+  char* token;
+  struct dirent *de;
+  token = strtok(path, s);
+
+  while(token){
+    if(dir_find(inode->ino, token, strlen(token), de)){
+      //invalid path
+      inode = NULL;
+      return -1;
+    }
+  }
+  readi(de->ino, inode);
+  return 2;
 }
 
 /* 
@@ -276,19 +292,42 @@ static int tfs_getattr(const char *path, struct stat *stbuf) {
 static int tfs_opendir(const char *path, struct fuse_file_info *fi) {
 
 	// Step 1: Call get_node_by_path() to get inode from path
-
+  struct inode inode;
+  int result = get_node_by_path(path, 0, &inode);//Set a global variable to store root directory inode num (second param)
 	// Step 2: If not find, return -1
-
+  if(result == -1){
+    return -1;
+  }
     return 0;
 }
 
 static int tfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
 
 	// Step 1: Call get_node_by_path() to get inode from path
-
+  struct inode inode;
+  int result =  get_node_by_path(path, 0, &inode);
+  if(result == -1){
+    return -1;
+  }  
 	// Step 2: Read directory entries from its data blocks, and copy them to filler
-
-	return 0;
+  struct dirent *de, *ptr = (struct dirent*)buffer;
+  int i, j;
+  void* buf;
+  for(i = 0; i < 16; i++){
+    bio_read(superBlock->d_start_blk + inode->direct_ptr[i], buf);
+    de = (struct dirent) buf;
+    for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
+      if(de->valid){
+	*ptr = *de;
+	ptr++;
+	de++;
+      }else{
+	de++;
+      }
+    }
+  }
+  
+  return 0;
 }
 
 
