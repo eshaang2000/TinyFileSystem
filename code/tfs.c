@@ -40,6 +40,7 @@ bitmap_t data_bitmap;
 int superBlockblock = 0; //the superblock starts at 0
 struct inode * inode_mem; //represent the inmemory inode
 struct superblock * s;
+int currentInode = 0;
 // Declare your in-memory data structures here
 
 /* 
@@ -218,7 +219,34 @@ int dir_find(uint16_t ino,
     const char * fname, size_t name_len, struct dirent * dirent) {
     
     // Step 1: Call readi() to get the inode using ino (inode number of current directory)
+    struct dirent *de;
+    struct inode *i_node; //changed into into a pointer
+    void *buffer; //need to allocate space for the buffer
+    int i, j, a; // a is for checking if readi did its job
+    a = readi(ino, i_node); //i_node has the inode for the directory we are in 
+    if(a == -1){
+        printf("Readi problem");
+        return -1;
+    }//This means we did not find the directoru
+
     
+    for(i = 0; i < 16; i++){
+        if(i_node->direct_ptr[i] == -1){//Not sure if need this
+        continue;
+        }
+        bio_read(superBlock->d_start_blk + i_node->direct_ptr[i], buffer);
+        de = (struct dirent) buffer;
+        for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
+        if(!strcmp(fname, de->name)){
+        //Found a match, copy to *dirent
+            *dirent = *de;
+        return 0;
+        }
+        de++;
+        }
+    }
+    return -1;
+
 
     // Step 2: Get data block of current directory from inode
 
@@ -228,11 +256,10 @@ int dir_find(uint16_t ino,
     return 0;
 }
 
-int dir_add(struct inode dir_inode, uint16_t f_ino,
-    const char * fname, size_t name_len) {
+int dir_add(struct inode dir_inode, uint16_t f_ino, const char * fname, size_t name_len) {
 
     // Step 1: Read dir_inode's data block and check each directory entry of dir_inode
-
+    
     // Step 2: Check if fname (directory name) is already used in other entries
 
     // Step 3: Add directory entry in dir_inode's data block and write to disk
@@ -246,8 +273,7 @@ int dir_add(struct inode dir_inode, uint16_t f_ino,
     return 0;
 }
 
-int dir_remove(struct inode dir_inode,
-    const char * fname, size_t name_len) {
+int dir_remove(struct inode dir_inode, const char * fname, size_t name_len) {
 
     // Step 1: Read dir_inode's data block and checks each directory entry of dir_inode
 
