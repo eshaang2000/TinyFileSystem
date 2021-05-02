@@ -228,6 +228,7 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
       inode = NULL;
       return -1;
     }
+    token = strtok(NULL, s);
   }
   readi(de->ino, inode);
   return 2;
@@ -333,26 +334,39 @@ static int tfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, o
 
 static int tfs_mkdir(const char *path, mode_t mode) {
 
-	// Step 1: Use dirname() and basename() to separate parent directory path and target directory name
+  // Step 1: Use dirname() and basename() to separate parent directory path and target directory name
+  char* dir_name = dirname(path), *base_name = basename(path), *token;
+  struct inode *inode;
 
-	// Step 2: Call get_node_by_path() to get inode of parent directory
+  // Step 2: Call get_node_by_path() to get inode of parent directory
+  int valid = get_node_by_path(dir_name, root_ino_, inode);//if negative invalid
+  if(valid == -1){
+    printf("invalid path");
+    return -1;
+  }
 
-	// Step 3: Call get_avail_ino() to get an available inode number
+  // Step 3: Call get_avail_ino() to get an available inode number
+  int next_ino = get_avail_ino();
 
-	// Step 4: Call dir_add() to add directory entry of target directory to parent directory
+  // Step 4: Call dir_add() to add directory entry of target directory to parent directory
+  int add_test = dir_add(*inode, next_ino, base_name, strlen(base_name));
+  if(add_test == -1){
+    printf("Directory already exists.\n");
+    return -1;
+  }
 
-	// Step 5: Update inode for target directory
-
-	// Step 6: Call writei() to write inode to disk
+  // Step 5: Update inode for target directory
+  
+  // Step 6: Call writei() to write inode to disk
 	
-	printf("Eshaan\n");
-	return 0;
+
+  return 0;
 }
 
 static int tfs_rmdir(const char *path) {
 
 	// Step 1: Use dirname() and basename() to separate parent directory path and target directory name
-
+  
 	// Step 2: Call get_node_by_path() to get inode of target directory
 
 	// Step 3: Clear data block bitmap of target directory
