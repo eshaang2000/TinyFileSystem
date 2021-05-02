@@ -294,11 +294,9 @@ int tfs_mkfs() {
 		perror("No bytes were written\n");
 		return -1;
 	}
-	free(buffer);
 	//write to the disk compelete - superblock
 
 	// initialize inode bitmap
-	buffer = malloc(BLOCK_SIZE);
 	inode_bitmap = malloc((superBlock->max_inum)*sizeof(char));
 	memset(inode_bitmap, 0, superBlock->max_inum);
 	buffer = memcpy(buffer, (void *) inode_bitmap, sizeof(*inode_bitmap));
@@ -307,11 +305,9 @@ int tfs_mkfs() {
 		perror("No bytes were read\n");
 		return -1;
 	}
-	free(buffer);
 	//write to disk complete - inode bitmap
 
 	// initialize data block bitmap
-	buffer = malloc(BLOCK_SIZE);
 	data_bitmap = malloc((superBlock->max_dnum)*sizeof(char));
 	memset(data_bitmap, 0, superBlock->max_dnum);
 	buffer = memcpy(buffer, (void *) data_bitmap, sizeof(*data_bitmap));
@@ -320,7 +316,6 @@ int tfs_mkfs() {
 		perror("No bytes were read\n");
 		return -1;
 	}
-	free(buffer);
 	//write to disk complete - data bitmap
 
 
@@ -331,9 +326,6 @@ int tfs_mkfs() {
 
 	int nextAvail = get_avail_ino();
 	printf("The next available %d\n", nextAvail);
-	free(inode_bitmap);
-	inode_bitmap = malloc(sizeof(superBlock->max_inum));
-	memset(inode_bitmap, 0, superBlock->max_inum);
 	nextAvail = get_avail_ino();
 	printf("The next available %d\n", nextAvail);
 	nextAvail = get_avail_ino();
