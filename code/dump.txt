@@ -9,3 +9,7 @@ Test code for avail methods
 	printf("The next available %d\n", nextAvail);
 	nextAvail = get_avail_blkno();
 	printf("The next available %d\n", nextAvail);
+
+No of inode block print statement
+
+    printf("The number of inode blocks are %d\n", n);

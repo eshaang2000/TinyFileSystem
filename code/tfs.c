@@ -69,11 +69,8 @@ int get_avail_ino() {
     }
 
     // Step 2: Traverse inode bitmap to find an available slot
-    /* 
-    1. This is pretty easy */
 
     int i;
-
     for (i = 0; i < superBlock -> max_inum; i++) {
         if (get_bitmap(inode_bitmap, i) == 0) {
             set_bitmap(inode_bitmap, i);
@@ -123,11 +120,8 @@ int get_avail_blkno() {
     }
 
     // Step 2: Traverse inode bitmap to find an available slot
-    /* 
-    1. This is pretty easy */
 
     int i;
-
     for (i = 0; i < superBlock -> max_dnum; i++) {
         if (get_bitmap(data_bitmap, i) == 0) {
             set_bitmap(data_bitmap, i);
@@ -222,8 +216,9 @@ int writei(uint16_t ino, struct inode * inode) {
  */
 int dir_find(uint16_t ino,
     const char * fname, size_t name_len, struct dirent * dirent) {
-
+    
     // Step 1: Call readi() to get the inode using ino (inode number of current directory)
+    
 
     // Step 2: Get data block of current directory from inode
 
@@ -297,12 +292,11 @@ int tfs_mkfs() {
     /* The size of one inode is 256 Bytes and there are 1024 no of inodes. Ofc this can easily be changed. So going to do the calculation now */
     int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE;
     superBlock -> d_start_blk = superBlock -> d_bitmap_blk + n;
-    printf("The number of inode blocks are %d\n", n);
     //superblock infomration done
     int a; // to check bio fucntions
     buffer = malloc(BLOCK_SIZE);
     buffer = memcpy(buffer, (void * ) superBlock, sizeof( * superBlock));
-    a = bio_write(0, buffer); //0th block to the superblock
+    a = bio_write(superBlockblock, buffer); //0th block to the superblock
     if (a <= 0) {
         perror("No bytes were written\n");
         return -1;
@@ -349,7 +343,7 @@ int tfs_mkfs() {
     struct inode * rootDir = malloc(sizeof(struct inode));
     rootDir -> ino = nextAvail;
     rootDir -> valid = 0;
-    rootDir -> size = 27;
+    rootDir -> size = 0;
     rootDir -> type = 0;
     rootDir -> link = 0;
     int i;
@@ -361,6 +355,10 @@ int tfs_mkfs() {
     }
     writei(rootDir -> ino, rootDir);
     free(rootDir);
+    inode_mem = malloc(sizeof(struct inode));
+    if (inode_mem == NULL) {
+        printf("inode mem memory alloc failes");
+    }
     printf("End of mkfs reached\n");
     return 0;
 }
@@ -401,6 +399,17 @@ static void * tfs_init() {
             printf("inode mem memory alloc failes");
         }
     }
+    // char* a = malloc(100);
+    char* a = "/eshaan/a.txt";
+    char* b = strdup(a);
+    printf("Seq\n");
+    // char* b = malloc(100);
+    char* c = dirname(b);
+
+    printf("Seq\n");
+    // b = basename("/ehsaan/a.txt");
+    printf("This is the dirname %s\n", c);
+    // printf("This is the dirname %s\n", b);
 
     return NULL;
 }
@@ -490,13 +499,24 @@ static int tfs_releasedir(const char * path, struct fuse_file_info * fi) {
     return 0;
 }
 
+
 static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi) {
 
     // Step 1: Use dirname() and basename() to separate parent directory path and target file name
+    char* tempD = strdup(path);
+    char* tempB = strdup(path);
+    char* dname = dirname(tempD);
+    char* bname = basename(tempB);
+    uint16_t inodeNumber = 0;
+    //How do you get the inodenumber of the root of this path
 
     // Step 2: Call get_node_by_path() to get inode of parent directory
 
+    get_node_by_path(path, inodeNumber, inode_mem);
+
     // Step 3: Call get_avail_ino() to get an available inode number
+
+    int nextAvail = get_avail_ino();
 
     // Step 4: Call dir_add() to add directory entry of target file to parent directory
 
@@ -510,8 +530,13 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
 static int tfs_open(const char * path, struct fuse_file_info * fi) {
 
     // Step 1: Call get_node_by_path() to get inode from path
+    int rootInode = 0;
+    int a = get_node_by_path(path, rootInode, inode_mem);
 
     // Step 2: If not find, return -1
+    if(a == -1){
+        return -1;
+    }
 
     return 0;
 }
