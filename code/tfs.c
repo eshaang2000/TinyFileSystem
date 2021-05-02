@@ -347,12 +347,9 @@ int tfs_mkfs() {
 	for(i=0; i<sizeof(rootDir->indirect_ptr)/sizeof(rootDir->indirect_ptr[0]); i++){
 		rootDir->indirect_ptr[i] = 0;
 	}
-	writei(0, rootDir);
-	struct inode* test = malloc(sizeof(struct inode));
-	readi(0, test);
-	printf("Please work %d\n",test->size);
+	writei(rootDir->ino, rootDir);
+	free(rootDir);
 	printf("End of mkfs reached\n");
-	
 	return 0;
 }
 
@@ -375,28 +372,24 @@ static void *tfs_init() {
   malloc bitmaps
   in emort inode
   */
- 	// superBlock = malloc(sizeof(superBlock));
-	// if(superBlock == NULL){
-	// 	printf("Superblock memory alloc failed\n");
-	// }
-	// else{
-	// 	printf("Successful alloc 1\n");
-	// }
-	// inode_bitmap = malloc(superBlock->max_inum);
-	// if(inode_bitmap == NULL){
-	// 	printf("inode_bitmap memory alloc failed\n");
-	// }
-	// else{
-	// 	printf("Successful alloc 2\n");
-	// }
-	// data_bitmap = malloc(superBlock->max_dnum); //char is 1 byte anyways
-	// if(data_bitmap == NULL){
-	// 	printf("data_bitmap memory alloc failed\n");
-	// }
-	// else{
-	// 	printf("Successful alloc 3\n");
-	// }
-	// inode_mem = malloc(sizeof(struct inode));
+  else{
+ 	superBlock = malloc(sizeof(superBlock));
+	if(superBlock == NULL){
+		printf("Superblock memory alloc failed\n");
+	}
+	inode_bitmap = malloc(superBlock->max_inum);
+	if(inode_bitmap == NULL){
+		printf("inode_bitmap memory alloc failed\n");
+	}
+	data_bitmap = malloc(superBlock->max_dnum); //char is 1 byte anyways
+	if(data_bitmap == NULL){
+		printf("data_bitmap memory alloc failed\n");
+	}
+	inode_mem = malloc(sizeof(struct inode));
+	if(inode_mem == NULL){
+		printf("inode mem memory alloc failes");
+	}
+}
 	
 	return NULL;
 }
