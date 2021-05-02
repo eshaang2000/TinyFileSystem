@@ -1,0 +1,11 @@
+Test code for avail methods
+
+
+	int nextAvail = get_avail_ino();
+	printf("The next available %d\n", nextAvail);\
+	nextAvail = get_avail_ino();
+	printf("The next available %d\n", nextAvail);
+	nextAvail = get_avail_ino();
+	printf("The next available %d\n", nextAvail);
+	nextAvail = get_avail_blkno();
+	printf("The next available %d\n", nextAvail);

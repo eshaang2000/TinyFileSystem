@@ -27,7 +27,7 @@ struct superblock* superBlock;//Represnts the inmemory superblock
 bitmap_t inode_bitmap;
 bitmap_t data_bitmap;
 int superBlockblock = 0; //the superblock starts at 0
-struct inode*  inode_mem; //represent the inmemory inode
+struct inode* inode_mem; //represent the inmemory inode
 struct superblock* s;
 // Declare your in-memory data structures here
 
@@ -143,26 +143,35 @@ int get_avail_blkno() {
  */
 int readi(uint16_t ino, struct inode *inode) {
 
-  // Step 1: Get the inode's on-disk block number
-  /* 
-  a. divide by total block nums to get the numeber of blcoks
-  b. Then modulo it to find which one  */
+  //first check if this is a valid inode number or not 
   if(ino >= MAX_INUM){
 	  perror("Invalid ino number\n");
 	  return -1;
   }
+
+  // Step 1: Get the inode's on-disk block number
+  
   int n = MAX_INUM * sizeof(struct inode) / BLOCK_SIZE; //total no of blocks
   int inodesInEach = MAX_INUM/n;
   int blockNo = ino/inodesInEach;
   printf("The block number is %d\n", blockNo);
-  ino = ino%inodesInEach;
-  // Step 2: Get offset of the inode in the inode on-disk block
 
-//   int offset = ino%sizeof(struct inode);
-  int offset = ino;
+  // Step 2: Get offset of the inode in the inode on-disk block
+  int offset = ino%inodesInEach;
   printf("The offset is %d\n", offset);
 
   // Step 3: Read the block from disk and then copy into inode structure
+  void* buffer = malloc(BLOCK_SIZE);
+  int a; // to check if bio_read operations happened or not
+  a = bio_read(blockNo, buffer);
+  if(a<0){
+	  perror("Read not succesful");
+	  free(buffer);
+	  return -1;
+  }
+  int o = sizeof(struct inode) * offset; // this tells me where to memcpy from
+  inode = memcpy(inode, buffer+o, sizeof(struct inode));
+  free(buffer);
   return 0;
 }
 
@@ -177,12 +186,23 @@ int writei(uint16_t ino, struct inode *inode) {
   	int inodesInEach = MAX_INUM/n;
   	int blockNo = ino/inodesInEach;
   	printf("The block number is %d\n", blockNo);
-  	ino = ino%inodesInEach;
 	// Step 2: Get the offset in the block where this inode resides on disk
-	int offset = ino;
+  	int offset = ino%inodesInEach;
   	printf("The offset is %d\n", offset);
 	// Step 3: Write inode to disk 
 
+	void* buffer = malloc(BLOCK_SIZE);
+	int o = sizeof(struct inode) * offset; // this tells me where to memcpy from
+	void* tempBuf = NULL;
+  	tempBuf = memcpy(buffer+o, inode, sizeof(struct inode));
+  	int a; // to check if bio_read operations happened or not
+  	a = bio_write(blockNo, buffer);
+  	if(a<0){
+	  perror("Read not succesful");
+	  return -1;
+  	}
+	tempBuf = NULL;
+	free(buffer);
 	return 0;
 }
 
@@ -250,12 +270,8 @@ int tfs_mkfs() {
 	dev_init(diskfile_path); // this initialzes our "disk" - should create a diskfile
 	dev_open(diskfile_path); // opens the disk though we didn't need to do this
 	void* buffer; // buffer to put stuff in
-	// write superblock information
 
-	/* 
-	1. space for the superblock is there on the diskfile
-	2. Set the memory as that
-	3. Put all the stuff in that would need to be copied */
+	// write superblock information
 
 	superBlock = malloc(sizeof(struct superblock)); 
 	superBlock->magic_num = MAGIC_NUM;
@@ -270,7 +286,7 @@ int tfs_mkfs() {
 	superBlock->d_start_blk = superBlock->d_bitmap_blk+n;
 	printf("The number of inode blocks are %d\n", n);
 	//superblock infomration done
-	int a; // tp check bio fucntions
+	int a; // to check bio fucntions
 	buffer = malloc(BLOCK_SIZE);
 	buffer = memcpy(buffer, (void *)superBlock, sizeof(*superBlock));
 	a = bio_write(0, buffer); //0th block to the superblock
@@ -304,32 +320,26 @@ int tfs_mkfs() {
 
 
 	// update bitmap information for root directory
-	/* inode for the root directory. The first inode is for the root directory. 
-	Use the set inode function to do this. make that
-	1. Make an inode. Initialize all attributes. Write to the disk drive. The zeroth entry in the table would be the roor directot */
-
 	int nextAvail = get_avail_ino();
-	printf("The next available %d\n", nextAvail);\
-	nextAvail = get_avail_ino();
-	printf("The next available %d\n", nextAvail);
-	nextAvail = get_avail_ino();
-	printf("The next available %d\n", nextAvail);
-	nextAvail = get_avail_blkno();
-	printf("The next available %d\n", nextAvail);
-
 	if(nextAvail < 0){
 		perror("No avaialable inode");
 		return -1;
 	}
-	
+
+	//update bitmap information for root directory done
+
+	// update inode for root directory - no idea - just update the proerties. 
+
+	/* inode for the root directory. The first inode is for the root directory. 
+	Use the set inode function to do this. make that
+	1. Make an inode. Initialize all attributes. Write to the disk drive. The zeroth entry in the table would be the roor directot */
+
 	struct inode* rootDir = malloc(sizeof(struct inode));
 	rootDir->ino = nextAvail;
 	rootDir->valid = 0;
-	rootDir->size = 0;
+	rootDir->size = 27;
 	rootDir->type = 0;
 	rootDir->link = 0;
-
-
 	int i;
 	for(i=0; i<sizeof(rootDir->direct_ptr)/sizeof(rootDir->direct_ptr[0]); i++){
 		rootDir->direct_ptr[i] = 0;
@@ -337,8 +347,11 @@ int tfs_mkfs() {
 	for(i=0; i<sizeof(rootDir->indirect_ptr)/sizeof(rootDir->indirect_ptr[0]); i++){
 		rootDir->indirect_ptr[i] = 0;
 	}
+	writei(0, rootDir);
+	struct inode* test = malloc(sizeof(struct inode));
+	readi(0, test);
+	printf("Please work %d\n",test->size);
 	printf("End of mkfs reached\n");
-	// update inode for root directory - no idea - just update the proerties. 
 	
 	return 0;
 }
