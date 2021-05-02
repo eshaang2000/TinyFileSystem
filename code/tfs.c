@@ -38,24 +38,28 @@ int get_avail_ino() {
 	printf("Getting into the get_avail_ino method\n");
 
 	// Step 1: Read inode bitmap from disk
-	/* 
-	1. You need to know where the inode bitmap is and then call bioread 
-	2. To do this first get the super block - done
-	3. Then get the inode bitmap block
-	4. traverse the inode
-	5. return the i*/
 	int a;
-
-	// a = bio_read(superBlockblock, superBlock);
-	// if(a<0){
-	// 	perror("Problem reading into the supernode");
-	// }
-	// a = bio_read(superBlock1->i_bitmap_blk, inode_bitmap); //this the problem
-	// // free(data_bitmap);
-	// if(a<0){
-	// 	printf("Problem reading into the inode");
-	// 	perror("Problem reading into the inode");
-	// }
+	void* buffer;
+	buffer = malloc(BLOCK_SIZE);
+	a = bio_read(0, buffer);
+	if(a<0){
+		perror("Problem reading into the supernode");
+		return -1;
+	}
+	free(superBlock);
+	superBlock = malloc(sizeof(struct superblock));
+	superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
+	printf("The superblock location %d\n", superBlock->magic_num);
+	printf("The superblock location %d\n", superBlock->i_bitmap_blk);
+	free(buffer);
+	buffer = malloc(BLOCK_SIZE);
+	a = bio_read(superBlock->i_bitmap_blk, buffer); //this the problem
+	inode_bitmap = memcpy(inode_bitmap, buffer, MAX_INUM);
+	printf("The superblock location %d\n", superBlock->i_bitmap_blk);
+	if(a<0){
+		perror("Problem reading into the inode");
+		return -1;
+	}
 	
 	// Step 2: Traverse inode bitmap to find an available slot
 	/* 
@@ -74,11 +78,15 @@ int get_avail_ino() {
 		return -1;
 	}
 	// Step 3: Update inode bitmap and write to disk 
-	// a = bio_write(superBlock->i_bitmap_blk, inode_bitmap);
-	// if(a<0){
-	// 	printf("Problem wriring into the inode");
-	// 	perror("Problem wriitn into the inode");
-	// }
+	free(buffer);
+	buffer = malloc(BLOCK_SIZE);
+	buffer = memcpy(buffer, (void *)inode_bitmap, sizeof(*inode_bitmap));
+	a = bio_write(superBlock->i_bitmap_blk, buffer);
+	if(a<0){
+		printf("Problem wriring into the inode");
+		return -1;
+	}
+	free(buffer);
 	return i;
 }
 
@@ -98,10 +106,14 @@ int get_avail_blkno() {
 	4. traverse the inode
 	5. return the i*/
 	int a;
-	// a = bio_read(superBlockblock, superBlock);
-	// if(a<0){
-	// 	perror("Problem reading into the supernode");
-	// }
+	void* buffer;
+
+	buffer = malloc(BLOCK_SIZE);
+	a = bio_read(0, buffer);
+	if(a<0){
+		perror("Problem reading into the supernode");
+		return -1;
+	}
 	// a = bio_read(superBlock->d_bitmap_blk, data_bitmap); //this the problem
 	// // free(data_bitmap);
 	// if(a<0){
@@ -127,13 +139,15 @@ int get_avail_blkno() {
 		return -1;
 	}
 	// Step 3: Update inode bitmap and write to disk 
-	// a = bio_write(superBlock1->d_bitmap_blk, data_bitmap1);
-	// if(a<0){
-	// 	printf("Problem wriring into the data");
-	// 	perror("Problem wriitn into the data");
-	// }
-	// free(data_bitmap1);
-	// free(superBlock);
+	free(buffer);
+	buffer = malloc(BLOCK_SIZE);
+	buffer = memcpy(buffer, inode_bitmap, sizeof(*inode_bitmap));
+	a = bio_write(superBlock->i_bitmap_blk, buffer);
+	if(a<0){
+		printf("Problem wriring into the inode");
+		return -1;
+	}
+	free(buffer);
 	return i;
 	// Step 2: Traverse data block bitmap to find an available slot
 
@@ -272,35 +286,42 @@ int tfs_mkfs() {
 	superBlock->d_start_blk = superBlock->d_bitmap_blk+n;
 	printf("The number of inode blocks are %d\n", n);
 	//superblock infomration done
-
-	int a;
-	// a = bio_write(0, superBlock); //0th block to the superblock
-	// if(a<=0){
-	// 	perror("No bytes were written\n");
-	// 	return -1;
-	// }
-
-	//write to the disk compelete
+	int a; // tp check bio fucntions
+	buffer = malloc(BLOCK_SIZE);
+	buffer = memcpy(buffer, (void *)superBlock, sizeof(*superBlock));
+	a = bio_write(0, buffer); //0th block to the superblock
+	if(a<=0){
+		perror("No bytes were written\n");
+		return -1;
+	}
+	free(buffer);
+	//write to the disk compelete - superblock
 
 	// initialize inode bitmap
-	inode_bitmap = malloc((superBlock->max_inum)*sizeof(char));//have to memset
+	buffer = malloc(BLOCK_SIZE);
+	inode_bitmap = malloc((superBlock->max_inum)*sizeof(char));
 	memset(inode_bitmap, 0, superBlock->max_inum);
+	buffer = memcpy(buffer, (void *) inode_bitmap, sizeof(*inode_bitmap));
+	a = bio_write(superBlock->i_bitmap_blk, buffer);
+	if(a<=0){
+		perror("No bytes were read\n");
+		return -1;
+	}
+	free(buffer);
+	//write to disk complete - inode bitmap
 
-
-	// a = bio_write(superBlock->i_bitmap_blk, inode_bitmap);
-	// if(a<=0){
-	// 	perror("No bytes were read\n");
-	// 	return -1;
-	// }
 	// initialize data block bitmap
-	data_bitmap = malloc((superBlock->max_dnum)*sizeof(char));//have to memset
+	buffer = malloc(BLOCK_SIZE);
+	data_bitmap = malloc((superBlock->max_dnum)*sizeof(char));
 	memset(data_bitmap, 0, superBlock->max_dnum);
-
-	// a = bio_write(superBlock->d_bitmap_blk, data_bitmap);
-	// if(a<=0){
-	// 	perror("No bytes were read\n");
-	// 	return -1;
-	// }
+	buffer = memcpy(buffer, (void *) data_bitmap, sizeof(*data_bitmap));
+	a = bio_write(superBlock->d_bitmap_blk, buffer);
+	if(a<=0){
+		perror("No bytes were read\n");
+		return -1;
+	}
+	free(buffer);
+	//write to disk complete - data bitmap
 
 
 	// update bitmap information for root directory
@@ -309,6 +330,15 @@ int tfs_mkfs() {
 	1. Make an inode. Initialize all attributes. Write to the disk drive. The zeroth entry in the table would be the roor directot */
 
 	int nextAvail = get_avail_ino();
+	printf("The next available %d\n", nextAvail);
+	free(inode_bitmap);
+	inode_bitmap = malloc(sizeof(superBlock->max_inum));
+	memset(inode_bitmap, 0, superBlock->max_inum);
+	nextAvail = get_avail_ino();
+	printf("The next available %d\n", nextAvail);
+	nextAvail = get_avail_ino();
+	printf("The next available %d\n", nextAvail);
+
 	if(nextAvail < 0){
 		perror("No avaialable inode");
 		return -1;
@@ -331,7 +361,7 @@ int tfs_mkfs() {
 	}
 	// free(data_bitmap);
 	// free(superBlock);
-	printf("Free successful\n");
+	printf("End of mkfs reached\n");
 	// update inode for root directory - no idea - just update the proerties. 
 	
 	return 0;
@@ -378,10 +408,6 @@ static void *tfs_init() {
 	// 	printf("Successful alloc 3\n");
 	// }
 	// inode_mem = malloc(sizeof(struct inode));
-	readi(18, NULL);
-	readi(1023, NULL);
-	readi(1024, NULL);
-	readi(0, NULL);
 	
 	return NULL;
 }
