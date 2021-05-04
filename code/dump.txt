@@ -13,3 +13,15 @@ Test code for avail methods
 No of inode block print statement
 
     printf("The number of inode blocks are %d\n", n);
+
+    // char* a = malloc(100);
+    char* a = "/eshaan/a.txt";
+    char* b = strdup(a);
+    printf("Seq\n");
+    // char* b = malloc(100);
+    char* c = dirname(b);
+
+    printf("Seq\n");
+    // b = basename("/ehsaan/a.txt");
+    printf("This is the dirname %s\n", c);
+    // printf("This is the dirname %s\n", b);
