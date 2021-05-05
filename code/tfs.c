@@ -569,7 +569,6 @@ int tfs_mkfs() {
     rootDir -> size = 0;
     rootDir -> type = 0; //dir type or file
     rootDir -> link = 2;
-    rootDir->no_dirents = 0;
     int i;
     for (i = 0; i < sizeof(rootDir -> direct_ptr) / sizeof(rootDir -> direct_ptr[0]); i++) {
         rootDir -> direct_ptr[i] = -1;
@@ -652,16 +651,25 @@ static int tfs_getattr(const char * path, struct stat * stbuf) {
 
 static int tfs_opendir(const char * path, struct fuse_file_info * fi) {
 
-    // Step 1: Call get_node_by_path() to get inode from path
-
-    // Step 2: If not find, return -1
-
+    
+        // Step 1: Call get_node_by_path() to get inode from path
+    struct inode* inode = malloc(sizeof(struct inode));
+    int result = get_node_by_path(path, 0, inode);//Set a global variable to store root directory inode inum (second param)
+        // Step 2: If not find, return -1
+    if(result == -1){
+        return -1;
+    }
     return 0;
 }
 
 static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info * fi) {
 
     // Step 1: Call get_node_by_path() to get inode from path
+    struct inode* inode = malloc(sizeof(struct inode));
+    int result =  get_node_by_path(path, 0, inode);
+    if(result == -1){
+        return -1;
+    }
 
     // Step 2: Read directory entries from its data blocks, and copy them to filler
 
@@ -723,7 +731,7 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
 
     // Step 2: Call get_node_by_path() to get inode of parent directory
 
-    get_node_by_path(path, inodeNumber, inode_mem);
+    get_node_by_path(dname, inodeNumber, inode_mem);
 
     // Step 3: Call get_avail_ino() to get an available inode number
 
@@ -732,9 +740,26 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
 
     // Step 4: Call dir_add() to add directory entry of target file to parent directory
 
+    dir_add(*inode_mem, nextAvail, bname, strlen(bname));
+
     // Step 5: Update inode for target file
 
+    struct inode* new = malloc(sizeof(struct inode));
+    new->ino = nextAvail;
+    new->valid = 1; 
+    new->size = 0; 
+    new->type = 2;
+    new->link = 1;
+    int i;
+    for (i = 0; i < sizeof(new -> direct_ptr) / sizeof(new -> direct_ptr[0]); i++) {
+        new -> direct_ptr[i] = -1;
+    }
+    for (i = 0; i < sizeof(new -> indirect_ptr) / sizeof(new -> indirect_ptr[0]); i++) {
+        new -> indirect_ptr[i] = -1;
+    }
     // Step 6: Call writei() to write inode to disk
+    writei(nextAvail, new);
+    free(new);
 
     return 0;
 }
