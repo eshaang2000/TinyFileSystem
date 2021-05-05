@@ -149,6 +149,7 @@ int get_avail_blkno() {
  * inode operations
  */
 int readi(uint16_t ino, struct inode * inode) {
+    printf("Getting into readi\n");
 
     //first check if this is a valid inode number or not 
     if (ino >= MAX_INUM) {
@@ -190,6 +191,7 @@ int readi(uint16_t ino, struct inode * inode) {
 }
 
 int writei(uint16_t ino, struct inode * inode) {
+    printf("Getting into writei\n");
 
     // Step 1: Get the block number where this inode resides on disk
     if (ino >= MAX_INUM) {
@@ -233,9 +235,10 @@ int writei(uint16_t ino, struct inode * inode) {
 1. Given a buffer - goes through it and finds if the name matches. Helper function for dir_find
  */
 int dir_find_help(void* buffer, struct dirent* dirent, const char* fname){
+    printf("Entering dir_find_help\n");
     int n = BLOCK_SIZE/sizeof(struct dirent); //the number of dirent structs in the bloc
     int i;
-    for(i = 0;i < n; i++){ //we iterate through all of them
+    for(i = 0; i < n; i++){ //we iterate through all of them
         dirent = memcpy(dirent, buffer+i*sizeof(dirent), sizeof(struct dirent));
         if(strcmp(fname, dirent->name) == 0){
             //Found a match, already in *dirent
@@ -251,6 +254,7 @@ int dir_find_help(void* buffer, struct dirent* dirent, const char* fname){
 int dir_find(uint16_t ino,
     const char * fname, size_t name_len, struct dirent * dirent) {
     
+    printf("Getting into the dir_find function\n");
     // Step 1: Call readi() to get the inode using ino (inode number of current directory)
     struct inode* i_node;
     i_node = malloc(sizeof(struct inode));
@@ -263,18 +267,18 @@ int dir_find(uint16_t ino,
     void* buffer;
     buffer = malloc(BLOCK_SIZE);
     int i, j; // a is for checking if readi did its job
-    j = 0;
+    j = 0; //this variable checks if it is found or not
     //We now get the superblock
-    a = bio_read(0, buffer);
+    a = bio_read(0, buffer); // bio read the superblock
     if (a < 0) {
         perror("Problem reading into the supernode");
         return -1;
     }
-    superBlock -> magic_num = 77;
+    superBlock -> magic_num = 77; //this is to check for corruption
     printf("The superblock is 1 %d\n", superBlock->magic_num);
     superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
     printf("The superblock is 2 %d\n", superBlock->magic_num);
-    printf("The size of the dirent is %d\n", sizeof(struct dirent));
+    printf("The size of the dirent is %ld\n", sizeof(struct dirent));
 
     // Step 2: Get data block of current directory from inode - how many data blocks is that going to be
 
@@ -290,7 +294,7 @@ int dir_find(uint16_t ino,
         //let's just say we have the buffer
         a = dir_find_help(buffer, dirent, fname);
         if(a == 0){//dir found
-            j = 1;
+            j = 1; //flag variable 
             break;
         } // this will also copy 
     }//for closed
@@ -304,16 +308,71 @@ int dir_find(uint16_t ino,
     return 0;
 } //method closed
 
+
+// struct dirent {
+// 	uint16_t ino;					/* inode number of the directory entry */
+// 	uint16_t valid;					/* validity of the directory entry */
+// 	char name[208];					/* name of the directory entry */
+// 	uint16_t len;					/* length of name */
+// };
+
+int init_blk(void* buffer){ //this is a data block
+  struct dirent *ptr = malloc(sizeof(struct dirent));
+  ptr->ino = 0;
+  ptr->valid = 0;
+  ptr->len = 0;
+  int i;
+  for(i = 0; i < BLOCK_SIZE / sizeof(struct dirent); i++){
+    memcpy(buffer + sizeof(struct dirent) * i, (void*)ptr ,sizeof(struct dirent));
+  }
+  free(ptr);
+  return 0;
+}
+
 int dir_add(struct inode dir_inode, uint16_t f_ino, const char * fname, size_t name_len) {
 
+    //get the superblock
+
     // Step 1: Read dir_inode's data block and check each directory entry of dir_inode
-    /* 
-    Eshaan Notes
-    1. this is already done in dir_find - we can just run that */
-    
     // Step 2: Check if fname (directory name) is already used in other entries
 
+    int a; //check variable
+    struct dirent* dir = malloc(sizeof(struct dirent));
+    a = dir_find(dir_inode.ino, fname, name_len, dir);
+    if(a == 0){
+        return -1;
+    }
+    
+
     // Step 3: Add directory entry in dir_inode's data block and write to disk
+    dir->ino = f_ino;
+    dir->valid = 1;
+    // dir->name = fname;
+    dir->len = name_len;
+    for(int i = 0; i<16; i++){
+        if(dir_inode.direct_ptr[i] == -1){//then get a new data block make it dirent type and start setting it
+            dir_inode.direct_ptr[i] = get_avail_blkno();
+            void* buffer = malloc(BLOCK_SIZE);
+            init_blk(buffer);
+            memcpy(buffer, dir, sizeof(struct dirent));
+            bio_write(superBlock->d_start_blk+dir_inode.direct_ptr[i], buffer);
+            break;
+        }
+        else{//there is something that already exists and we just go through that and see if there are any invalid bits, if yes break, if no repeat
+            void* buffer = malloc(BLOCK_SIZE);
+            a = bio_read(superBlock->d_start_blk+dir_inode.direct_ptr[i], buffer);
+            int i; 
+            struct dirent* temp = malloc(sizeof(struct dirent));
+            for(i = 0; i < BLOCK_SIZE / sizeof(struct dirent); i++){
+                memcpy(temp, buffer + sizeof(struct dirent) * i, sizeof(struct dirent));
+                if(temp->valid == 0){
+                    memcpy(buffer+i*sizeof(struct dirent), dir, sizeof(struct dirent));
+                    bio_write(superBlock->d_start_blk+dir_inode.direct_ptr[i], buffer);
+                    return 0;
+                }
+            }//for closed
+        }
+    }
 
     // Allocate a new data block for this directory if it does not exist
 
@@ -352,34 +411,51 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char * fname, size_t n
 //   readi(new->ino, &temp);
 //   temp->direct_ptr[0] = get_avail_blkno();
 //   writei(temp->ino, &temp);
-//   return 0;
+  return 0;
 }
 
-int dir_remove(struct inode dir_inode, const char * fname, size_t name_len) {
 
-    // Step 1: Read dir_inode's data block and checks each directory entry of dir_inode
+int dir_remove_help(void* buffer, struct dirent* dirent, const char* fname){
+  int n = BLOCK_SIZE/sizeof(struct dirent); //the number of dirent structs in the bloc
+  int i;
+  for(i = 0;i < n; i++){ //we iterate through all of them
+    dirent = memcpy(dirent, buffer+i*sizeof(struct dirent), sizeof(struct dirent));
+    if(strcmp(fname, dirent->name) == 0){
+      //Found a match, already in dirent
+      dirent->valid = 0;
+      memcpy(buffer+sizeof(struct dirent), dirent, sizeof(struct dirent));
+      return 0;
+    }
+  }
+  return -1;
+}
 
-    // Step 2: Check if fname exist
+int dir_remove(struct inode dir_inode, const char* fname, size_t name_len) {
 
-    // Step 3: If exist, then remove it from dir_inode's data block and write to disk
-//  struct dirent *de;
-//   void *buffer;
-//   int i, j;
-//   for(i = 0; i < 16; i++){
-//     bio_read(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
-//     de = (struct dirent) buffer; //fix this
-//     for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
-//       if(!strcmp(fname, de->name)){
-// 	//Found a match
-// 	de->valid = 0;
-// 	bio_write(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
-// 	return 1;
-//       }
-//       de++;
-//     }
-//   }	
+  // Step 1: Read dir_inode's data block and checks each directory entry of dir_inode
 
-  return 0;
+  // Step 2: Check if fname exist
+
+  // Step 3: If exist, then remove it from dir_inode's data block and write to disk
+
+  int i, a;
+  void *buffer = malloc(sizeof(BLOCK_SIZE));
+  struct dirent *ptr = malloc(sizeof(struct dirent));
+  for(i = 0; i < 16; i++){
+    if(dir_inode.direct_ptr[i] == -1){
+      //directory doesn't exist in dir_inode
+      return -1;
+    }
+    bio_read(superBlock->d_start_blk + dir_inode.direct_ptr[i], buffer);
+    a = dir_remove_help(buffer, ptr, fname);
+    if(a == 0){
+      //It was found
+      bio_write(superBlock->d_start_blk + dir_inode.direct_ptr[i], buffer);
+    }
+  }
+  free(buffer);
+  free(ptr);
+return 0;
 }
 
 /* 
@@ -396,21 +472,23 @@ int get_node_by_path(const char * path, uint16_t ino, struct inode * inode) {
     //It's the root directory
     return 1;
   }
-  
   const char s[2] = "/";
-  char* token;
-  struct dirent *de;
-  token = strtok(path, s);
+  char* tempD = strdup(path);
+  char* token = malloc(sizeof(*path));
+  struct dirent *de = malloc(sizeof(struct dirent));
+  token = strtok(tempD, s);
+  printf("Reaches here\n");
 
   while(token){
-    if(dir_find(inode->ino, token, strlen(token), de)){
+    if(dir_find(inode->ino, token, strlen(token), de)==-1){
       //invalid path
       inode = NULL;
       return -1;
-    }
+    } //if ends
+    printf("%s\n", token);
     token = strtok(NULL, s);
+    readi(de->ino, inode);
   }
-  readi(de->ino, inode);
   return 2;
 }
 
@@ -471,7 +549,7 @@ int tfs_mkfs() {
     //write to disk complete - data bitmap
 
     // update bitmap information for root directory
-    int nextAvail = get_avail_ino();
+    int nextAvail = get_avail_ino(); // 0 is the next inode in this case
     if (nextAvail < 0) {
         perror("No avaialable inode");
         return -1;
@@ -489,8 +567,9 @@ int tfs_mkfs() {
     rootDir -> ino = nextAvail;
     rootDir -> valid = 1;
     rootDir -> size = 0;
-    rootDir -> type = 0;
-    rootDir -> link = 0;
+    rootDir -> type = 0; //dir type or file
+    rootDir -> link = 2;
+    rootDir->no_dirents = 0;
     int i;
     for (i = 0; i < sizeof(rootDir -> direct_ptr) / sizeof(rootDir -> direct_ptr[0]); i++) {
         rootDir -> direct_ptr[i] = -1;
@@ -504,8 +583,7 @@ int tfs_mkfs() {
     if (inode_mem == NULL) {
         printf("inode mem memory alloc failes");
     }
-    struct dirent* dirent = malloc(sizeof(struct dirent));
-    dir_find(0, "Eshaan", sizeof("Eshaan"), dirent);
+    a = get_node_by_path("/Eshan/noah/sid.txt", 0, inode_mem);
     return 0;
 }
 
@@ -639,6 +717,8 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
     char* dname = dirname(tempD);
     char* bname = basename(tempB);
     uint16_t inodeNumber = 0;
+    printf("The dirname is %s\n", dname);
+    printf("The basename is %s\n", bname);
     //How do you get the inodenumber of the root of this path
 
     // Step 2: Call get_node_by_path() to get inode of parent directory
@@ -648,6 +728,7 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
     // Step 3: Call get_avail_ino() to get an available inode number
 
     int nextAvail = get_avail_ino();
+    printf("The next available inode number is %d\n", nextAvail);
 
     // Step 4: Call dir_add() to add directory entry of target file to parent directory
 

@@ -38,6 +38,7 @@ struct inode {
 	int			direct_ptr[16];		/* direct pointer to data block */ //data block number?
 	int			indirect_ptr[8];	/* indirect pointer to data block */
 	struct stat	vstat;				/* inode stat */
+	int no_dirents; 				/* no of dirents */
 };
 
 struct dirent {
