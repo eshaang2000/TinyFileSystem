@@ -110,12 +110,12 @@ int get_avail_blkno() {
         return -1;
     }
     superBlock -> magic_num = 77;
-    printf("The superblock location %d\n", superBlock -> magic_num);
-    printf("The superblock location %d\n", superBlock -> d_bitmap_blk);
+    printf("The superblock magic num %d\n", superBlock -> magic_num);
+    printf("The d bitmap location block no is %d\n", superBlock -> d_bitmap_blk);
     superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
     a = bio_read(superBlock -> d_bitmap_blk, buffer); //this the problem
     data_bitmap = memcpy(data_bitmap, buffer, MAX_INUM);
-    printf("The superblock location %d\n", superBlock -> magic_num);
+    printf("The superblock magic num %d\n", superBlock -> magic_num);
     if (a < 0) {
         perror("Problem reading into the inode");
         return -1;
@@ -229,13 +229,20 @@ int writei(uint16_t ino, struct inode * inode) {
     return 0;
 }
 
-int dur_find_help(void* buffer, struct dirent* dirent){
-    int n = BLOCK_SIZE/sizeof(struct dirent);
+/* 
+1. Given a buffer - goes through it and finds if the name matches. Helper function for dir_find
+ */
+int dir_find_help(void* buffer, struct dirent* dirent, const char* fname){
+    int n = BLOCK_SIZE/sizeof(struct dirent); //the number of dirent structs in the bloc
     int i;
-    for(i = 0;i < n; i++){
-
+    for(i = 0;i < n; i++){ //we iterate through all of them
+        dirent = memcpy(dirent, buffer+i*sizeof(dirent), sizeof(struct dirent));
+        if(strcmp(fname, dirent->name) == 0){
+            //Found a match, already in *dirent
+                return 0;
+            }
     }
-    return 0;
+    return -1;
 }
 
 /* 
@@ -245,7 +252,6 @@ int dir_find(uint16_t ino,
     const char * fname, size_t name_len, struct dirent * dirent) {
     
     // Step 1: Call readi() to get the inode using ino (inode number of current directory)
-    struct dirent* de = malloc(sizeof(struct dirent));
     struct inode* i_node;
     i_node = malloc(sizeof(struct inode));
     int a;
@@ -257,7 +263,7 @@ int dir_find(uint16_t ino,
     void* buffer;
     buffer = malloc(BLOCK_SIZE);
     int i, j; // a is for checking if readi did its job
-
+    j = 0;
     //We now get the superblock
     a = bio_read(0, buffer);
     if (a < 0) {
@@ -276,47 +282,34 @@ int dir_find(uint16_t ino,
         if(i_node->direct_ptr[i] == -1){//Not sure if need this
             continue;
         }//if there is nothing in the direct_ptr then nah
-        a = bio_read(superBlock->d_start_blk + i_node->direct_ptr[i], buffer); //So this contains the datablock
+        a = bio_read(superBlock->d_start_blk + i_node->direct_ptr[i], buffer); //So this contains the datablock and we put it in the buffer
         if(a<0){
             perror("Oh no");
             return -1;
         }
-        //let's just say we have the dirent
-    
-
-
-
+        //let's just say we have the buffer
+        a = dir_find_help(buffer, dirent, fname);
+        if(a == 0){//dir found
+            j = 1;
+            break;
+        } // this will also copy 
     }//for closed
-        
-    //     de = (struct dirent*) buffer;//have to memcpy - 
-    //     /* 
-    //     1. Figure out how many dirents in the buffer
-    //     2. Figure out the size of each dirent
-    //     3. Iterate through the whole thing
-    //     4. Compare if the name is found
-    //      */
-    //     for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){
-    //         if(!strcmp(fname, de->name)){
-    //         //Found a match, copy to *dirent
-    //             *dirent = *de;
-    //             return 0;
-    //         }
-    //     de++;
-    //     }
-    // }
-    // return -1;
-
 
     // Step 3: Read directory's data block and check each directory entry.
     //If the name matches, then copy directory entry to dirent structure
-
     free(buffer);
+    if(j!=1){
+        return -1; // not found
+    }
     return 0;
 } //method closed
 
 int dir_add(struct inode dir_inode, uint16_t f_ino, const char * fname, size_t name_len) {
 
     // Step 1: Read dir_inode's data block and check each directory entry of dir_inode
+    /* 
+    Eshaan Notes
+    1. this is already done in dir_find - we can just run that */
     
     // Step 2: Check if fname (directory name) is already used in other entries
 
@@ -494,16 +487,16 @@ int tfs_mkfs() {
 
     struct inode * rootDir = malloc(sizeof(struct inode));
     rootDir -> ino = nextAvail;
-    rootDir -> valid = 0;
+    rootDir -> valid = 1;
     rootDir -> size = 0;
     rootDir -> type = 0;
     rootDir -> link = 0;
     int i;
     for (i = 0; i < sizeof(rootDir -> direct_ptr) / sizeof(rootDir -> direct_ptr[0]); i++) {
-        rootDir -> direct_ptr[i] = 0;
+        rootDir -> direct_ptr[i] = -1;
     }
     for (i = 0; i < sizeof(rootDir -> indirect_ptr) / sizeof(rootDir -> indirect_ptr[0]); i++) {
-        rootDir -> indirect_ptr[i] = 0;
+        rootDir -> indirect_ptr[i] = -1;
     }
     writei(rootDir->ino, rootDir);
     free(rootDir);
