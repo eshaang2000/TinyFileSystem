@@ -66,3 +66,40 @@ No of inode block print statement
 //   readi(new->ino, &temp);
 //   temp->direct_ptr[0] = get_avail_blkno();
 //   writei(temp->ino, &temp);
+
+
+
+    //testing dir fucntions
+    nextAvail = get_avail_blkno();
+    rootDir -> direct_ptr[0] = nextAvail;
+    writei(0, rootDir);
+    readi(0, inode_mem);
+    init_blk(buffer);
+    struct dirent * dir = malloc(sizeof(struct dirent));
+    dir -> ino = 1;
+    dir -> valid = 1;
+    // dir->name = "Eshaan";
+    strcpy(dir -> name, "Eshaan");
+    dir -> len = strlen(dir -> name);
+    memcpy(buffer, dir, sizeof(struct dirent));
+    dir -> ino = 1;
+    dir -> valid = 1;
+    // dir->name = "Eshaan";
+    strcpy(dir -> name, "AJ");
+    printf("The name test %s\n", dir -> name);
+    dir -> len = strlen(dir -> name);
+    memcpy(buffer + sizeof(struct dirent), dir, sizeof(struct dirent));
+    bio_write(superBlock -> d_start_blk + rootDir -> direct_ptr[0], buffer);
+    strcpy(dir -> name, "Mike");
+    printf("The name before %s\n", dir -> name);
+    dir_find(inode_mem -> ino, "AJ", strlen("AJ"), dir);
+    printf("The name after %s\n", dir -> name);
+
+    dir_add( * rootDir, get_avail_ino(), "Mike", strlen("Mike"));
+
+    dir_add( * rootDir, get_avail_ino(), "Noah", strlen("Noah"));
+    dir_find(inode_mem -> ino, "Noah", strlen("Noah"), dir);
+    printf("The name after %s\n", dir -> name);
+    dir_remove(*rootDir, "AJ", strlen("AJ"));
+    int z = dir_find(inode_mem -> ino, "AJ", strlen("AJ"), dir);
+    printf("The value we get from dir find is %d\n",z);

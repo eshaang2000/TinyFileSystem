@@ -242,6 +242,9 @@ int dir_find_help(void * buffer, struct dirent * dirent,
     for (i = 0; i < n; i++) { //we iterate through all of them
         dirent = memcpy(dirent, buffer + i * sizeof(struct dirent), sizeof(struct dirent));
         printf("The name of the dirents %s\n", dirent -> name);
+        if(dirent->valid == 0){
+            continue;
+        }
         if (strcmp(fname, dirent -> name) == 0) {
             //Found a match, already in *dirent
             return 0;
@@ -557,45 +560,11 @@ int tfs_mkfs() {
         rootDir -> indirect_ptr[i] = superBlock -> max_dnum;
     }
     writei(rootDir -> ino, rootDir);
-    // free(rootDir);
+    free(rootDir);
     inode_mem = malloc(sizeof(struct inode));
     if (inode_mem == NULL) {
         printf("inode mem memory alloc failes");
     }
-
-    //testing dir fucntions
-    nextAvail = get_avail_blkno();
-    rootDir -> direct_ptr[0] = nextAvail;
-    writei(0, rootDir);
-    readi(0, inode_mem);
-    init_blk(buffer);
-    struct dirent * dir = malloc(sizeof(struct dirent));
-    dir -> ino = 1;
-    dir -> valid = 1;
-    // dir->name = "Eshaan";
-    strcpy(dir -> name, "Eshaan");
-    dir -> len = strlen(dir -> name);
-    memcpy(buffer, dir, sizeof(struct dirent));
-    dir -> ino = 1;
-    dir -> valid = 1;
-    // dir->name = "Eshaan";
-    strcpy(dir -> name, "AJ");
-    printf("The name test %s\n", dir -> name);
-    dir -> len = strlen(dir -> name);
-    memcpy(buffer + sizeof(struct dirent), dir, sizeof(struct dirent));
-    bio_write(superBlock -> d_start_blk + rootDir -> direct_ptr[0], buffer);
-    strcpy(dir -> name, "Mike");
-    printf("The name before %s\n", dir -> name);
-    dir_find(inode_mem -> ino, "AJ", strlen("AJ"), dir);
-    printf("The name after %s\n", dir -> name);
-
-    dir_add( * rootDir, get_avail_ino(), "Mike", strlen("Mike"));
-
-    dir_add( * rootDir, get_avail_ino(), "Noah", strlen("Noah"));
-    dir_find(inode_mem -> ino, "Noah", strlen("Noah"), dir);
-    printf("The name after %s\n", dir -> name);
-    dir_remove(*rootDir, "AJ", strlen("AJ"));
-    dir_find(inode_mem -> ino, "AJ", strlen("AJ"), dir);
     return 0;
 }
 
