@@ -25,3 +25,44 @@ No of inode block print statement
     // b = basename("/ehsaan/a.txt");
     printf("This is the dirname %s\n", c);
     // printf("This is the dirname %s\n", b);
+
+
+
+
+    // Allocate a new data block for this directory if it does not exist
+
+    // Update directory inode
+
+    // Write directory entry
+//     void *buffer = malloc(BLOCK_SIZE);
+//     int i, j, blk_num_i;//index of direct_ptr in inode where the valid dirent is in
+//     struct dirent *save, *de;
+//     struct dirent *new = malloc(sizeof(struct dirent));//save will point to the first valid dirent in the direct_ptr in inode
+//     new->ino = f_ino;
+//     new->name = fname; // str cpy
+//     new->len = name_len;
+//     new->valid = 1;
+  
+//   for(i = 0; i < 16; i++){
+//     bio_read(superBlock->d_start_blk + dir_inode->direct_ptr[i], buffer);
+//     de = (struct* dirent) buffer;
+//     for(j = 0; j < BLOCK_SIZE / sizeof(struct dirent); j += sizeof(struct dirent)){ //similar things
+//       if(!strcmp(fname, de->name)){
+// 	//Found a match, can't add
+// 	return -1;
+//       }
+//       if(!(de->valid)){
+// 	blk_num_i = dir_inode->direct_ptr[i];
+// 	save = de;
+//       }
+//       de++;
+//     }
+//   }
+  
+//   *save = *new;
+//   bio_write(superBlock->d_start_blk + dir_inode->direct_ptr[blk_num_i], buffer);//writes updated data block to disk
+//   /*End of Step 3*/
+//   struct inode temp;
+//   readi(new->ino, &temp);
+//   temp->direct_ptr[0] = get_avail_blkno();
+//   writei(temp->ino, &temp);
