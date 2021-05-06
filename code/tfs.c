@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <libgen.h>
 #include <limits.h>
+#include <time.h>
 
 #include "block.h"
 #include "tfs.h"
@@ -52,6 +53,19 @@ int get_avail_blkno() {
 	// Step 3: Update data block bitmap and write to disk 
 
 	return 0;
+}
+
+int init_blk((void*) buffer){
+  struct dirent *ptr = malloc(sizeof(dirent));
+  ptr->ino = 0;
+  ptr->valid = 0;
+  ptr->len = 0;
+  int i;
+  for(i = 0; i < BLOCK_SIZE / sizeof(dirent); i++){
+    memcpy(buffer + sizeof(dirent) * i, (void*)ptr,sizeof(dirent));
+  }
+  free(ptr);
+  return 0;
 }
 
 /* 
@@ -174,6 +188,21 @@ int dir_add(struct inode dir_inode, uint16_t f_ino, const char *fname, size_t na
   return 0;
 }
 
+int dir_remove_help(void* buffer, struct dirent* dirent, const char* fname){
+  int n = BLOCK_SIZE/sizeof(struct dirent); //the number of dirent structs in the bloc
+  int i;
+  for(i = 0;i < n; i++){ //we iterate through all of them
+    dirent = memcpy(dirent, buffer+i*sizeof(struct dirent), sizeof(struct dirent));
+    if(strcmp(fname, dirent->name) == 0){
+      //Found a match, already in *dirent
+      dirent->valid = 0;
+      memcpy(buffer+i*sizeof(struct dirent), dirent, sizeof(struct dirent));
+      return 0;
+    }
+  }
+  return -1;
+}
+
 int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
 
   // Step 1: Read dir_inode's data block and checks each directory entry of dir_inode
@@ -181,7 +210,25 @@ int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
   // Step 2: Check if fname exist
 
   // Step 3: If exist, then remove it from dir_inode's data block and write to disk
-  
+
+  int i, a;
+  void* buffer = malloc(sizeof(BLOCK_SIZE));
+  struct dirent *ptr = malloc(sizeof(struct dirent));
+  for(i = 0; i < 16; i++){
+    if(dir_inode.direct_ptr[i] == -1){
+      //directory doesn't exist in dir_inode
+      return -1;
+    }
+    bio_read(superBlock->d_start_blk + dir_inode.direct_ptr[i], buffer);
+    a = dir_remove_help(buffer, ptr, fname);
+    if(a == 0){
+      //It was found
+      bio_write(superBlock->d_start_blk + dir_inode.direct_ptr[i], buffer);
+    }
+  }
+  free(buffer);
+  free(ptr);
+  /*
   struct dirent *de;
   void *buffer;
   int i, j;
@@ -198,7 +245,7 @@ int dir_remove(struct inode dir_inode, const char *fname, size_t name_len) {
       de++;
     }
   }	
-
+  */
   return 0;
 }
 
@@ -209,7 +256,6 @@ int get_node_by_path(const char *path, uint16_t ino, struct inode *inode) {
 	
 	// Step 1: Resolve the path name, walk through path, and finally, find its inode.
 	// Note: You could either implement it in a iterative way or recursive way
-
 
   readi(ino, inode);
   if(strlen(path) == 1){
@@ -335,49 +381,102 @@ static int tfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, o
 static int tfs_mkdir(const char *path, mode_t mode) {
 
   // Step 1: Use dirname() and basename() to separate parent directory path and target directory name
+
   char* dir_name = dirname(path), *base_name = basename(path), *token;
   struct inode *inode;
 
   // Step 2: Call get_node_by_path() to get inode of parent directory
-  int valid = get_node_by_path(dir_name, root_ino_, inode);//if negative invalid
+
+  int valid = get_node_by_path(dir_name, 0, inode);//if negative invalid
   if(valid == -1){
     printf("invalid path");
     return -1;
   }
 
   // Step 3: Call get_avail_ino() to get an available inode number
+
   int next_ino = get_avail_ino();
 
-  // Step 4: Call dir_add() to add directory entry of target directory to parent directory
-  int add_test = dir_add(*inode, next_ino, base_name, strlen(base_name));
+  // Step 4: Call dir_add to add directory entry of target directory to parent directory
+  
+  int add_test = dir_add(inode, next_ino, base_name, strlen(base_name));
+  inode->link += 1;
+  inode->vstat->nlink += 1;
+  inode->vstat->st_atime = time(NULL);
+  inode->vstat->st_mtime = time(NULL);
+  writei(inode->ino, inode);
+  
   if(add_test == -1){
     printf("Directory already exists.\n");
     return -1;
   }
 
   // Step 5: Update inode for target directory
+  // Not sure what needs to be updated
+
+  readi(next_ino, inode);
   
+  inode->valid = 1;
+  inode->ino = next_ino;
+  inode->type = 1; //directory
+  inode->link = 2;
+  inode->vstat->nlink = 2;
+  inode->vstat->st_atime = time(NULL);
+  inode->vstat->st_mtime = time(NULL);
+  
+  //May have to update st_atime and st_mtime in vstat of inode
   // Step 6: Call writei() to write inode to disk
-	
+
+  writei(next_ino, inode));
+  
 
   return 0;
 }
 
 static int tfs_rmdir(const char *path) {
 
-	// Step 1: Use dirname() and basename() to separate parent directory path and target directory name
+  // Step 1: Use dirname() and basename() to separate parent directory path and target directory name
+
+  char* dir_name = dirname(path), *base_name = basename(path), *token;
+
+  // Step 2: Call get_node_by_path() to get inode of target directory
+
+  struct inode *target_dir = malloc(sizeof(struct inode));
   
-	// Step 2: Call get_node_by_path() to get inode of target directory
+  if(get_node_by_path(path, 0, target_dir) < 0){//Second parameter is the inode of root directory, make it a global var
+    printf("Invalid path\n");
+    return -1;
+  }
 
-	// Step 3: Clear data block bitmap of target directory
+  // Step 3: Clear data block bitmap of target directory
 
-	// Step 4: Clear inode bitmap and its data block
+  int i, j;
+  for(i = 0; i < 16, i++){
+    unset_bitmap(superBlock->d_bitmap_blk, target_dir->direct_ptr[i]);
+  }
 
-	// Step 5: Call get_node_by_path() to get inode of parent directory
+  // Step 4: Clear inode bitmap and its data block
 
-	// Step 6: Call dir_remove() to remove directory entry of target directory in its parent directory
+  unset_bitmap(superBlock->i_bitmap_blk, target_dir->ino);
 
-	return 0;
+  void* buffer = malloc(sizeof(BLOCK_SIZE));
+  struct dirent *ptr;
+  for(i = 0; i < 16; i++){
+    bio_read(superBlock->d_start_blk + target_dir->direct_ptr[i], buffer);
+    ptr = (struct dirent) buffer;
+    for(j = 0; j < BLOCK_SIZE / sizeof(dirent); j++){
+      ptr->valid = -1;
+      ptr++;
+    }
+  }
+
+  // Step 5: Call get_node_by_path() to get inode of parent directory
+
+  get_node_by_path();
+
+  // Step 6: Call dir_remove() to remove directory entry of target directory in its parent directory
+
+  return 0;
 }
 
 static int tfs_releasedir(const char *path, struct fuse_file_info *fi) {
