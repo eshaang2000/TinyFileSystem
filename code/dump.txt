@@ -25,3 +25,7 @@ No of inode block print statement
     // b = basename("/ehsaan/a.txt");
     printf("This is the dirname %s\n", c);
     // printf("This is the dirname %s\n", b);
+
+
+    struct dirent* dirent = malloc(sizeof(struct dirent));
+    dir_find(0, "Eshaan", sizeof("Eshaan"), dirent);
