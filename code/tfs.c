@@ -560,52 +560,11 @@ int tfs_mkfs() {
         rootDir -> indirect_ptr[i] = superBlock -> max_dnum;
     }
     writei(rootDir -> ino, rootDir);
-<<<<<<< HEAD
     free(rootDir);
-=======
-    // free(rootDir);
->>>>>>> 0fb627e55eb17e7d70623df64bcb736a90c028a5
     inode_mem = malloc(sizeof(struct inode));
     if (inode_mem == NULL) {
         printf("inode mem memory alloc failes");
     }
-<<<<<<< HEAD
-=======
-
-    //testing dir fucntions
-    nextAvail = get_avail_blkno();
-    rootDir -> direct_ptr[0] = nextAvail;
-    writei(0, rootDir);
-    readi(0, inode_mem);
-    init_blk(buffer);
-    struct dirent * dir = malloc(sizeof(struct dirent));
-    dir -> ino = 1;
-    dir -> valid = 1;
-    // dir->name = "Eshaan";
-    strcpy(dir -> name, "Eshaan");
-    dir -> len = strlen(dir -> name);
-    memcpy(buffer, dir, sizeof(struct dirent));
-    dir -> ino = 1;
-    dir -> valid = 1;
-    // dir->name = "Eshaan";
-    strcpy(dir -> name, "AJ");
-    printf("The name test %s\n", dir -> name);
-    dir -> len = strlen(dir -> name);
-    memcpy(buffer + sizeof(struct dirent), dir, sizeof(struct dirent));
-    bio_write(superBlock -> d_start_blk + rootDir -> direct_ptr[0], buffer);
-    strcpy(dir -> name, "Mike");
-    printf("The name before %s\n", dir -> name);
-    dir_find(inode_mem -> ino, "AJ", strlen("AJ"), dir);
-    printf("The name after %s\n", dir -> name);
-
-    dir_add( * rootDir, get_avail_ino(), "Mike", strlen("Mike"));
-
-    dir_add( * rootDir, get_avail_ino(), "Noah", strlen("Noah"));
-    dir_find(inode_mem -> ino, "Noah", strlen("Noah"), dir);
-    printf("The name after %s\n", dir -> name);
-    dir_remove(*rootDir, "AJ", strlen("AJ"));
-    dir_find(inode_mem -> ino, "AJ", strlen("AJ"), dir);
->>>>>>> 0fb627e55eb17e7d70623df64bcb736a90c028a5
     return 0;
 }
 
