@@ -242,6 +242,10 @@ int dir_find_help(void * buffer, struct dirent * dirent,
     for (i = 0; i < n; i++) { //we iterate through all of them
         dirent = memcpy(dirent, buffer + i * sizeof(struct dirent), sizeof(struct dirent));
         printf("The name of the dirents %s\n", dirent -> name);
+	if(dirent->valid == 0){
+	  //Invalid dirent, keep searching
+	  continue;
+	}
         if (strcmp(fname, dirent -> name) == 0) {
             //Found a match, already in *dirent
             return 0;
