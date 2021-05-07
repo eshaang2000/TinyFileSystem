@@ -1,3 +1,7 @@
 1. Regarding seperating dirname and basename - 
 you can use the inbuilt functions dirname() and basename(). Please lookup up https://linux.die.net/man/3/dirname
 if confused
+
+Eshaan
+1) Fix readi and writei
+2) Set ptrs inode to -1
