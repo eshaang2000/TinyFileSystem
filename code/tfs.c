@@ -818,7 +818,7 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
     printf("The next available inode number is %d\n", nextAvail);
 
     // Step 4: Call dir_add() to add directory entry of target file to parent directory
-    a = dir_add(*inode_mem, nextAvail, bname, strlen(bname));
+    a = dir_add(*inode_mem, nextAvail, bname, strlen(bname)); //base name is the dile name
     if(a == -1){
         printf("Problem in create");
         return -1;
@@ -829,8 +829,11 @@ static int tfs_create(const char * path, mode_t mode, struct fuse_file_info * fi
     inode->ino = nextAvail;
     inode->valid = 1;
     inode->size = 0;
-    inode->type = 2;
+    inode->type = 2; //because it is a file
     inode->link = 1;
+    inode->vstat.st_nlink = 1;
+    inode->vstat.st_atime = time(NULL);
+    inode->vstat.st_mtime = time(NULL);
     int i;
     for (i = 0; i < sizeof(inode -> direct_ptr) / sizeof(inode -> direct_ptr[0]); i++) {
         inode -> direct_ptr[i] = superBlock -> max_dnum;
@@ -861,42 +864,142 @@ static int tfs_open(const char * path, struct fuse_file_info * fi) {
 static int tfs_read(const char * path, char * buffer, size_t size, off_t offset, struct fuse_file_info * fi) {
 
     // Step 1: You could call get_node_by_path() to get inode from path
+    int rootInode = 0;
+    int a = get_node_by_path(path, rootInode, inode_mem);
+    
+    void* buf = malloc(BLOCK_SIZE);
+    int s = 0;
+    int j = 0; // where in the final buffer we are at
 
     // Step 2: Based on size and offset, read its data blocks from disk
-
+    int n; //this would be which data block
+    int mod; //where in the data block do we read
+    n = offset/BLOCK_SIZE; 
+    mod = offset%BLOCK_SIZE; //where in the 
+    while(s<size){
+    if(inode_mem->direct_ptr[n] != MAX_DNUM){
+        bio_read(inode_mem->direct_ptr[n], buf);
+        if((size-s) < BLOCK_SIZE){
+            buffer = memcpy(buffer+j, buf+mod, (size-s));
+            break;
+        }
+        else{
+                buffer = memcpy(buffer+j, buf+mod, BLOCK_SIZE-mod);
+                s+=BLOCK_SIZE-mod;
+                j = s; 
+                n++;
+            }
+            mod = 0;
+        }
+    else{
+        printf("Just wrong\n");
+        return -1;
+    }
+    }//while loop closed
     // Step 3: copy the correct amount of data from offset to buffer
 
     // Note: this function should return the amount of bytes you copied to buffer
-    return 0;
+    return s;
 }
 
 static int tfs_write(const char * path,
     const char * buffer, size_t size, off_t offset, struct fuse_file_info * fi) {
     // Step 1: You could call get_node_by_path() to get inode from path
-
+    int rootInode = 0;
+    int a = get_node_by_path(path, rootInode, inode_mem);
     // Step 2: Based on size and offset, read its data blocks from disk
+     void* buf = malloc(BLOCK_SIZE);
+    int s = 0;
+    int j = 0; // where in the final buffer we are at
+    int n; //this would be which data block
+    int mod; //where in the data block do we read
+    n = offset/BLOCK_SIZE; 
+    mod = offset%BLOCK_SIZE; //where in the 
+
+    while(s<size){
+        if(n == 16){
+            return -1; 
+        }
+    if(inode_mem->direct_ptr[n] != MAX_DNUM){
+        bio_read(inode_mem->direct_ptr[n], buf);
+        if((size-s) < BLOCK_SIZE){
+            buf = memcpy(buf+mod, buffer+j, (size-s));
+            bio_write(inode_mem->direct_ptr[n], buf);
+            break;
+        }
+        else{
+                buf = memcpy(buf+mod, buffer+j, BLOCK_SIZE-mod);
+                s+=BLOCK_SIZE-mod;
+                j = s; 
+                bio_write(inode_mem->direct_ptr[n], buf);
+                n++;
+            }
+            mod = 0;
+        }
+    else{
+         inode_mem->direct_ptr[n] = get_avail_blkno();
+        }
+    }//while loop closed
 
     // Step 3: Write the correct amount of data from offset to disk
 
     // Step 4: Update the inode info and write it to disk
+    inode_mem->vstat.st_atime = time(NULL);
+    inode_mem->vstat.st_mtime = time(NULL);
+    inode_mem->size+=s;
+    writei(inode_mem->ino, inode_mem);
 
     // Note: this function should return the amount of bytes you write to disk
-    return size;
+    return s;
 }
 
 static int tfs_unlink(const char * path) {
 
     // Step 1: Use dirname() and basename() to separate parent directory path and target file name
+    int a;
+    char * tempD = strdup(path);
+    char * tempB = strdup(path);
+    char * dname = dirname(tempD);
+    char * bname = basename(tempB);
+    uint16_t inodeNumber = 0;
+    printf("The dirname is %s\n", dname);
+    printf("The basename is %s\n", bname);
 
     // Step 2: Call get_node_by_path() to get inode of target file
 
+    int rootInode = 0;
+    a = get_node_by_path(path, rootInode, inode_mem);
+
     // Step 3: Clear data block bitmap of target file
 
-    // Step 4: Clear inode bitmap and its data block
+    int i;
+    void* buffer = malloc(BLOCK_SIZE);
+    bio_read(superBlock->d_bitmap_blk, buffer);
+    data_bitmap = memcpy(data_bitmap, buffer, MAX_DNUM);
+    for(i = 0; i < 16; i++){
+      if(inode_mem->direct_ptr[i] == MAX_DNUM){
+          continue;
+      }
+        unset_bitmap(data_bitmap, inode_mem->direct_ptr[i]);
+    }
+  data_bitmap = memcpy(buffer, data_bitmap, sizeof(MAX_DNUM));
+  bio_write(superBlock->d_bitmap_blk, buffer);
+
+  // Step 4: Clear inode bitmap and its data block
+
+  bio_read(superBlock->i_bitmap_blk, buffer);
+  inode_bitmap = memcpy(inode_bitmap, buffer, MAX_DNUM);
+  unset_bitmap(inode_bitmap, inode_mem->ino);
+  for(i = 0; i < 16; i++){
+    inode_mem->direct_ptr[i] = MAX_DNUM;
+  }
+  inode_bitmap = memcpy(buffer, inode_bitmap, sizeof(MAX_INUM));
+  bio_write(superBlock->i_bitmap_blk, buffer);
 
     // Step 5: Call get_node_by_path() to get inode of parent directory
-
+    a = get_node_by_path(dname, rootInode, inode_mem);
     // Step 6: Call dir_remove() to remove directory entry of target file in its parent directory
+    dir_remove(*inode_mem, bname, strlen(bname));
 
     return 0;
 }
