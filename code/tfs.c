@@ -648,7 +648,7 @@ static void tfs_destroy(void * userdata) {
 static int tfs_getattr(const char * path, struct stat * stbuf) {
 
     // Step 1: call get_node_by_path() to get inode from path
-    printf("Getting into the getattr funtion");
+    printf("Getting into the getattr funtion\n");
     int a = get_node_by_path(path, 0, inode_mem);//Just use the root dir inode to start
     if(a == -1){
         return -1;
@@ -708,6 +708,7 @@ static int tfs_mkdir(const char * path, mode_t mode) {
 
     // Step 1: Use dirname() and basename() to separate parent directory path and target directory name
   printf("Enter tfs_mkdir\n");
+
   printf("Step 1\n");
     char * tempD = strdup(path);
     char * tempB = strdup(path);
@@ -718,10 +719,10 @@ static int tfs_mkdir(const char * path, mode_t mode) {
     struct inode *inode = malloc(sizeof(struct inode));
 
   // Step 2: Call get_node_by_path() to get inode of parent directory
-  printf("Step 2\n");
+    printf("Step 2\n");
     int valid = get_node_by_path(dir_name, 0, inode);//if negative invalid
     if(valid == -1){
-        printf("invalid path");
+        printf("invalid path\n");
         return -1;
     }
 
@@ -732,15 +733,15 @@ static int tfs_mkdir(const char * path, mode_t mode) {
   // Step 4: Call dir_add to add directory entry of target directory to parent directory
     printf("Step 4\n");
     int add_test = dir_add(*inode, next_ino, base_name, strlen(base_name));
-  inode->link += 1;
-  inode->vstat.st_nlink += 1;
-  inode->vstat.st_atime = time(NULL);
-  inode->vstat.st_mtime = time(NULL);
-  writei(inode->ino, inode);
+    inode->link += 1;
+    inode->vstat.st_nlink += 1;
+    inode->vstat.st_atime = time(NULL);
+    inode->vstat.st_mtime = time(NULL);
+    writei(inode->ino, inode);
 
-  if(add_test == -1){
-    printf("Directory already exists.\n");
-    return -1;
+    if(add_test == -1){
+        printf("Directory already exists.\n");
+        return -1;
   }
 
   // Step 5: Update inode for target directory
