@@ -42,7 +42,8 @@ struct inode * inode_mem; //represent the inmemory inode
 struct superblock * s;
 int currentInode = 0;
 // Declare your in-memory data structures here
-
+static int tfs_mkdir(const char * path, mode_t mode);
+static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info * fi);
 /* 
  * Get available inode number from bitmap
  */
@@ -147,7 +148,7 @@ int get_avail_blkno() {
  */
 int readi(uint16_t ino, struct inode * inode) {
     printf("Getting into readi\n");
-
+    printf("initial readi ino %d\n", ino);
     //first check if this is a valid inode number or not 
     if (ino >= MAX_INUM) {
         perror("Invalid ino number\n");
@@ -182,8 +183,11 @@ int readi(uint16_t ino, struct inode * inode) {
         return -1;
     }
     int o = sizeof(struct inode) * offset; // this tells me where to memcpy from
+    printf("o is %d\n", o);
     inode = memcpy(inode, buffer + o, sizeof(struct inode));
+    printf("ino number in readi %d\n", inode->ino);
     free(buffer);
+    printf("Exiting readi\n");
     return 0;
 }
 
@@ -344,7 +348,7 @@ int dir_add(struct inode dir_inode, uint16_t f_ino,
         printf("The file or dir already exists\n");
         return -1;
     }
-
+    printf("Out of dir_find, still in dir_add\n");
     // Step 3: Add directory entry in dir_inode's data block and write to disk
     dir -> ino = f_ino;
     dir -> valid = 1;
@@ -359,7 +363,8 @@ int dir_add(struct inode dir_inode, uint16_t f_ino,
             init_blk(buffer);
             memcpy(buffer, dir, sizeof(struct dirent));
             bio_write(superBlock -> d_start_blk + dir_inode.direct_ptr[i], buffer);
-            break;
+            //break;
+	    return 0;
         } 
         else { //there is something that already exists and we just go through that and see if there are any invalid bits, if yes break, if no repeat
             printf("The add function found this data block %d\n", dir_inode.direct_ptr[i]);
@@ -437,6 +442,7 @@ int get_node_by_path(const char * path, uint16_t ino, struct inode * inode) {
     // Step 1: Resolve the path name, walk through path, and finally, find its inode.
     // Note: You could either implement it in a iterative way or recursive way
     printf("Getting into the get_node_by_path\n");
+    printf("ino passed %d\n", ino);
     readi(ino, inode);
     if (strlen(path) == 1) {
         //It's the root directory
@@ -444,16 +450,27 @@ int get_node_by_path(const char * path, uint16_t ino, struct inode * inode) {
     }
     const char s[2] = "/";
     char * tempD = strdup(path);
-    char * token = malloc(sizeof( * path));
+    char * token;// = malloc(sizeof( * path));
     struct dirent * de = malloc(sizeof(struct dirent));
     token = strtok(tempD, s);
+
+    printf("The token is %s\n", token);
+    printf("First The token ino is %d\n", inode->ino);
+    int b = dir_find(inode->ino, token, strlen(token), de);
+    if (b == -1) {
+      //invalid path
+            inode = NULL;
+            return -1;
+    } //if ends
+    
+    readi(de->ino, inode);
     printf("Reaches here\n");
 
     while (token) {
         printf("The token is %s\n", token);
         printf("The token is %d\n", inode->ino);
         
-        int b = dir_find(inode -> ino, token, strlen(token), de);
+        b = dir_find(inode -> ino, token, strlen(token), de);
         if (b == -1) {
             //invalid path
             inode = NULL;
@@ -461,7 +478,7 @@ int get_node_by_path(const char * path, uint16_t ino, struct inode * inode) {
         } //if ends
         printf("%s\n", token);
         token = strtok(NULL, s);
-        readi(de -> ino, inode);
+        readi(de->ino, inode);
     }
     return 2;
 }
@@ -562,6 +579,21 @@ int tfs_mkfs() {
     }
     get_node_by_path("/", 0, inode_mem);
     printf("inode value %d\n", inode_mem->link);
+
+    //S_IFDIR | 0755; use for mode when calling mkdir
+    //static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info * fi)
+    tfs_mkdir("/AJ", S_IFDIR);
+    struct dirent *de = malloc(sizeof(struct dirent));
+    
+    int tester = dir_find(0, "AJ", strlen("AJ"), de);
+    printf("dir_find test %d\n", tester);
+    printf("Name of sub-directory %s, INUMBER %d\n", de->name, de->ino);
+    
+    tfs_mkdir("/AJ/NOAH", S_IFDIR);
+    tester = dir_find(1, "NOAH", strlen("NOAH"), de);
+    printf("dir_find test %d\n", tester);
+    printf("Name of sub-directory %s\n", de->name);
+    
     return 0;
 }
 
@@ -675,7 +707,8 @@ static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler,
 static int tfs_mkdir(const char * path, mode_t mode) {
 
     // Step 1: Use dirname() and basename() to separate parent directory path and target directory name
-
+  printf("Enter tfs_mkdir\n");
+  printf("Step 1\n");
     char * tempD = strdup(path);
     char * tempB = strdup(path);
     char * dir_name = dirname(tempD);
@@ -685,7 +718,7 @@ static int tfs_mkdir(const char * path, mode_t mode) {
     struct inode *inode = malloc(sizeof(struct inode));
 
   // Step 2: Call get_node_by_path() to get inode of parent directory
-
+  printf("Step 2\n");
     int valid = get_node_by_path(dir_name, 0, inode);//if negative invalid
     if(valid == -1){
         printf("invalid path");
@@ -693,12 +726,12 @@ static int tfs_mkdir(const char * path, mode_t mode) {
     }
 
   // Step 3: Call get_avail_ino() to get an available inode number
-
-  int next_ino = get_avail_ino();
+    printf("Step 3\n");
+    int next_ino = get_avail_ino();
 
   // Step 4: Call dir_add to add directory entry of target directory to parent directory
-
-  int add_test = dir_add(*inode, next_ino, base_name, strlen(base_name));
+    printf("Step 4\n");
+    int add_test = dir_add(*inode, next_ino, base_name, strlen(base_name));
   inode->link += 1;
   inode->vstat.st_nlink += 1;
   inode->vstat.st_atime = time(NULL);
@@ -712,7 +745,7 @@ static int tfs_mkdir(const char * path, mode_t mode) {
 
   // Step 5: Update inode for target directory
   // Not sure what needs to be updated
-
+  printf("Step 5\n");
 //   readi(next_ino, inode);
 
   inode->valid = 1;
@@ -725,9 +758,9 @@ static int tfs_mkdir(const char * path, mode_t mode) {
 
   //May have to update st_atime and st_mtime in vstat of inode
   // Step 6: Call writei() to write inode to disk
-
+  printf("Step 6\n");
   writei(next_ino, inode);
-
+  printf("Exit tfs_mkdir\n");
 
   return 0;
 }
