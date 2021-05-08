@@ -30,7 +30,7 @@
 #include <limits.h>
 
 #include "block.h"
-
+#include <errno.h>
 #include "tfs.h"
 
 char diskfile_path[PATH_MAX];
@@ -61,14 +61,11 @@ int get_avail_ino() {
     superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
     a = bio_read(superBlock -> i_bitmap_blk, buffer); //this the problem
     inode_bitmap = memcpy(inode_bitmap, buffer, MAX_INUM);
-    printf("The superblock magic number is %d\n", superBlock -> magic_num);
     if (a < 0) {
         perror("Problem reading into the inode");
         return -1;
     }
-
     // Step 2: Traverse inode bitmap to find an available slot
-
     int i;
     for (i = 0; i < superBlock -> max_inum; i++) {
         if (get_bitmap(inode_bitmap, i) == 0) {
@@ -89,7 +86,6 @@ int get_avail_ino() {
         return -1;
     }
     free(buffer);
-    printf("The next available inode is %d\n", i);
     return i;
 }
 
@@ -108,11 +104,9 @@ int get_avail_blkno() {
         perror("Problem reading into the supernode");
         return -1;
     }
-    superBlock -> magic_num = 77;
     superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
     a = bio_read(superBlock -> d_bitmap_blk, buffer); //this the problem
     data_bitmap = memcpy(data_bitmap, buffer, MAX_INUM);
-    printf("The superblock magic num %d\n", superBlock -> magic_num);
     if (a < 0) {
         perror("Problem reading into the inode");
         return -1;
@@ -139,7 +133,6 @@ int get_avail_blkno() {
         return -1;
     }
     free(buffer);
-    printf("The next available data block is %d\n", i);
     return i;
 }
 
@@ -169,13 +162,13 @@ int readi(uint16_t ino, struct inode * inode) {
     // Step 3: Read the block from disk and then copy into inode structure
     int a; // to check if bio_read operations happened or not
     void * buffer = malloc(BLOCK_SIZE);
-    a = bio_read(0, buffer);
-    if (a < 0) {
-        perror("Problem reading into the supernode");
-        return -1;
-    }
-    superBlock -> magic_num = 77;
-    superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
+    // a = bio_read(0, buffer);
+    // if (a < 0) {
+    //     perror("Problem reading into the supernode");
+    //     return -1;
+    // }
+    // superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
+    printf("The super block value is %d\n", superBlock -> i_start_blk);
     a = bio_read(superBlock -> i_start_blk + blockNo, buffer);
     if (a < 0) {
         perror("Read not succesful");
@@ -210,14 +203,13 @@ int writei(uint16_t ino, struct inode * inode) {
 
     void * buffer = malloc(BLOCK_SIZE);
     int a; // to check if bio_read operations happened or not
-    a = bio_read(0, buffer);
-    if (a < 0) {
-        perror("Problem reading into the supernode");
-        return -1;
-    }
-    superBlock -> magic_num = 77;
-    superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
-    printf("The superblock magic num is %d\n", superBlock -> magic_num);
+    // a = bio_read(0, buffer);
+    // if (a < 0) {
+    //     perror("Problem reading into the supernode");
+    //     return -1;
+    // }
+
+    // superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
     int o = sizeof(struct inode) * offset; // this tells me where to memcpy from
     void * tempBuf = NULL;
     tempBuf = memcpy(buffer + o, inode, sizeof(struct inode));
@@ -241,9 +233,11 @@ int dir_find_help(void * buffer, struct dirent * dirent,
     int i;
     for (i = 0; i < n; i++) { //we iterate through all of them
         dirent = memcpy(dirent, buffer + i * sizeof(struct dirent), sizeof(struct dirent));
+        
         if(dirent->valid == 0){
             continue;
         }
+        printf("The dirent name is %d\n");
         if (strcmp(fname, dirent -> name) == 0) {
             //Found a match, already in *dirent
             return 0;
@@ -268,7 +262,7 @@ int dir_find(uint16_t ino,
     int a;
     a = readi(ino, i_node);
     if (a == -1) {
-        printf("Readi problem");
+        printf("Readi problem\n");
         return -1;
     }
     //i_node contains the inode of the current directory
@@ -279,14 +273,12 @@ int dir_find(uint16_t ino,
     j = 0; //this variable checks if it is found or not
 
     //We now get the superblock
-    a = bio_read(0, buffer); // bio read the superblock
-    if (a < 0) {
-        perror("Problem reading into the supernode");
-        return -1;
-    }
-    superBlock -> magic_num = 77; //this is to check for corruption
-    superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
-    printf("The superblock magic number is %d\n", superBlock -> magic_num);
+    // a = bio_read(0, buffer); // bio read the superblock
+    // if (a < 0) {
+    //     perror("Problem reading into the supernode");
+    //     return -1;
+    // }
+    // superBlock = memcpy(superBlock, buffer, sizeof(struct superblock));
 
     //we get the superblock too
 
@@ -294,6 +286,7 @@ int dir_find(uint16_t ino,
 
     for (i = 0; i < 16; i++) {
         if (i_node -> direct_ptr[i] == superBlock -> max_dnum) { //If max_dnum it is not allocated
+            printf("Yeah %d\n", i_node -> direct_ptr[i]);
             continue;
         } //if there is nothing in the direct_ptr then nah
         a = bio_read(superBlock -> d_start_blk + i_node -> direct_ptr[i], buffer); //So this contains the datablock and we put it in the buffer
@@ -348,13 +341,14 @@ int dir_add(struct inode dir_inode, uint16_t f_ino,
         printf("The file or dir already exists\n");
         return -1;
     }
+    printf("The dir inode number is %d\n", dir_inode.ino);
     printf("Out of dir_find, still in dir_add\n");
     // Step 3: Add directory entry in dir_inode's data block and write to disk
     dir -> ino = f_ino;
     dir -> valid = 1;
     strcpy(dir -> name, fname);
     dir -> len = name_len;
-
+    printf("The dir name is %s\n", dir->name);
     for (int i = 0; i < 16; i++) {
         if (dir_inode.direct_ptr[i] == MAX_DNUM) { //then get a new data block make it dirent type and start setting it
             printf("The add function did not find a data block allocated\n");
@@ -362,9 +356,12 @@ int dir_add(struct inode dir_inode, uint16_t f_ino,
             void * buffer = malloc(BLOCK_SIZE);
             init_blk(buffer);
             memcpy(buffer, dir, sizeof(struct dirent));
+            printf("The dir name and inode is %s %d\n", dir->name, superBlock -> d_start_blk + dir_inode.direct_ptr[i]);
             bio_write(superBlock -> d_start_blk + dir_inode.direct_ptr[i], buffer);
+            writei(dir_inode.ino, &dir_inode);
+            printf("This is the data that is inputted %d\n",dir_inode.direct_ptr[i]);
             //break;
-	    return 0;
+	        return 0;
         } 
         else { //there is something that already exists and we just go through that and see if there are any invalid bits, if yes break, if no repeat
             printf("The add function found this data block %d\n", dir_inode.direct_ptr[i]);
@@ -459,6 +456,7 @@ int get_node_by_path(const char * path, uint16_t ino, struct inode * inode) {
     int b = dir_find(inode->ino, token, strlen(token), de);
     if (b == -1) {
       //invalid path
+        printf("It gets in here\n");
             inode = NULL;
             return -1;
     } //if ends
@@ -582,17 +580,17 @@ int tfs_mkfs() {
 
     //S_IFDIR | 0755; use for mode when calling mkdir
     //static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info * fi)
-    tfs_mkdir("/AJ", S_IFDIR);
-    struct dirent *de = malloc(sizeof(struct dirent));
+    // tfs_mkdir("/AJ", S_IFDIR);
+    // struct dirent *de = malloc(sizeof(struct dirent));
     
-    int tester = dir_find(0, "AJ", strlen("AJ"), de);
-    printf("dir_find test %d\n", tester);
-    printf("Name of sub-directory %s, INUMBER %d\n", de->name, de->ino);
+    // int tester = dir_find(0, "AJ", strlen("AJ"), de);
+    // printf("dir_find test %d\n", tester);
+    // printf("Name of sub-directory %s, INUMBER %d\n", de->name, de->ino);
     
-    tfs_mkdir("/AJ/NOAH", S_IFDIR);
-    tester = dir_find(1, "NOAH", strlen("NOAH"), de);
-    printf("dir_find test %d\n", tester);
-    printf("Name of sub-directory %s\n", de->name);
+    // tfs_mkdir("/AJ/NOAH", S_IFDIR);
+    // tester = dir_find(1, "NOAH", strlen("NOAH"), de);
+    // printf("dir_find test %d\n", tester);
+    // printf("Name of sub-directory %s\n", de->name);
     
     return 0;
 }
@@ -649,23 +647,30 @@ static int tfs_getattr(const char * path, struct stat * stbuf) {
 
     // Step 1: call get_node_by_path() to get inode from path
     printf("Getting into the getattr funtion\n");
-    int a = get_node_by_path(path, 0, inode_mem);//Just use the root dir inode to start
+    struct inode* inode = malloc(sizeof(struct inode));
+    int a = get_node_by_path(path, 0, inode);//Just use the root dir inode to start
     if(a == -1){
-        return -1;
+        printf("Invalid path\n");
+        free(inode);
+        return -ENOENT;
     }
+
+    printf("The inode value in get attr is %d\n", inode->ino);
     // Step 2: fill attribute of file into stbuf from inode
-    stbuf -> st_ino = inode_mem->ino;
+    stbuf -> st_ino = inode->ino;
     stbuf -> st_mode = S_IFDIR | 0755;
     stbuf -> st_nlink = 2;
     time( & stbuf -> st_mtime);
-
+    printf("Get atrr out\n");
+    free(inode);
     return 0;
 }
 
 static int tfs_opendir(const char * path, struct fuse_file_info * fi) {
 
         // Step 1: Call get_node_by_path() to get inode from path
-        int result = get_node_by_path(path, 0, inode_mem);//Set a global variable to store root directory inode num (second param)
+        struct inode* inode = malloc(sizeof(struct inode));
+        int result = get_node_by_path(path, 0, inode);//Set a global variable to store root directory inode num (second param)
         // Step 2: If not find, return -1
         if(result == -1){
             return -1;
@@ -678,21 +683,28 @@ static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler,
     printf("Getting into the read_dir\n");
     void * buf = malloc(BLOCK_SIZE);
     struct dirent* de = malloc(sizeof(struct dirent));
+    struct inode* inode = malloc(sizeof(struct inode));
     // Step 1: Call get_node_by_path() to get inode from path
-    int result = get_node_by_path(path, 0, inode_mem);
+    int result = get_node_by_path(path, 0, inode);
+    printf("The path is %s\n", path);
     if(result == -1){
         printf("invalid path");
         return -1;
     }
+
+    printf("The validity things\n\n%d %d", inode->direct_ptr[0], inode->direct_ptr[1]);
     // Step 2: Read directory entries from its data blocks, and copy them to filler
+    printf("Does it get here\n");
     int i;
     int j;
     for(i = 0; i < 16; i++){
-        if(inode_mem->direct_ptr[i] != MAX_DNUM){
-            bio_read(inode_mem->direct_ptr[i], buf);
+        printf("Get's into the if statement %d\n", inode->direct_ptr[i]);
+        if(inode->direct_ptr[i] != MAX_DNUM){
+            bio_read(superBlock->d_start_blk+inode->direct_ptr[i], buf);
             for(j=0; j<BLOCK_SIZE/sizeof(struct dirent); j++){
                 memcpy(de, buf+j*sizeof(struct dirent), sizeof(struct dirent));
                 if(de->valid == 0){
+                    printf("Not valid\n");
                     continue;
                 }
                 printf("Calling filler with %s\n", de->name);
@@ -707,9 +719,9 @@ static int tfs_readdir(const char * path, void * buffer, fuse_fill_dir_t filler,
 static int tfs_mkdir(const char * path, mode_t mode) {
 
     // Step 1: Use dirname() and basename() to separate parent directory path and target directory name
-  printf("Enter tfs_mkdir\n");
+    printf("Enter tfs_mkdir\n");
 
-  printf("Step 1\n");
+    printf("Step 1\n");
     char * tempD = strdup(path);
     char * tempB = strdup(path);
     char * dir_name = dirname(tempD);
@@ -733,12 +745,19 @@ static int tfs_mkdir(const char * path, mode_t mode) {
   // Step 4: Call dir_add to add directory entry of target directory to parent directory
     printf("Step 4\n");
     int add_test = dir_add(*inode, next_ino, base_name, strlen(base_name));
+    readi(inode->ino, inode);
     inode->link += 1;
     inode->vstat.st_nlink += 1;
     inode->vstat.st_atime = time(NULL);
     inode->vstat.st_mtime = time(NULL);
     writei(inode->ino, inode);
+    void * buffer = malloc(BLOCK_SIZE);
+    bio_read(superBlock->d_start_blk+inode->direct_ptr[0], buffer);
+    printf("The validity things\n\n%d %d", inode->direct_ptr[0], inode->direct_ptr[1]);
+    struct dirent* dir = malloc(sizeof(struct dirent));
+    memcpy(dir, buffer, sizeof(struct dirent));
 
+    printf("\n\nTHIS IS TEH DTA BLOCK %s\n", dir->name);
     if(add_test == -1){
         printf("Directory already exists.\n");
         return -1;
@@ -749,18 +768,30 @@ static int tfs_mkdir(const char * path, mode_t mode) {
   printf("Step 5\n");
 //   readi(next_ino, inode);
 
-  inode->valid = 1;
-  inode->ino = next_ino;
-  inode->type = 1; //directory
-  inode->link = 2;
-  inode->vstat.st_nlink = 2;
-  inode->vstat.st_atime = time(NULL);
-  inode->vstat.st_mtime = time(NULL);
+   free(inode);
+   struct inode * inode2 = malloc(sizeof(struct inode));
+  inode2->valid = 1;
+  inode2->ino = next_ino;
+  inode2->type = 1; //directory
+  inode2->link = 2;
+  inode2->vstat.st_nlink = 2;
+  inode2->vstat.st_atime = time(NULL);
+  inode2->vstat.st_mtime = time(NULL);
+  int i;
+  for (i = 0; i < sizeof(inode2 -> direct_ptr) / sizeof(inode2 -> direct_ptr[0]); i++) {
+        inode2 -> direct_ptr[i] = superBlock -> max_dnum;
+    }
+    for (i = 0; i < sizeof(inode2 -> indirect_ptr) / sizeof(inode2 -> indirect_ptr[0]); i++) {
+        inode2 -> indirect_ptr[i] = superBlock -> max_dnum;
+    }
+
 
   //May have to update st_atime and st_mtime in vstat of inode
   // Step 6: Call writei() to write inode to disk
   printf("Step 6\n");
-  writei(next_ino, inode);
+  writei(next_ino, inode2);
+
+  printf("The validity things\n\n%d %d", inode2->direct_ptr[0], inode2->direct_ptr[1]);
   printf("Exit tfs_mkdir\n");
 
   return 0;
@@ -912,7 +943,7 @@ static int tfs_read(const char * path, char * buffer, size_t size, off_t offset,
     mod = offset%BLOCK_SIZE; //where in the 
     while(s<size){
     if(inode_mem->direct_ptr[n] != MAX_DNUM){
-        bio_read(inode_mem->direct_ptr[n], buf);
+        bio_read(superBlock->d_start_blk + inode_mem->direct_ptr[n], buf);
         if((size-s) < BLOCK_SIZE){
             buffer = memcpy(buffer+j, buf+mod, (size-s));
             break;
@@ -955,17 +986,17 @@ static int tfs_write(const char * path,
             return -1; 
         }
     if(inode_mem->direct_ptr[n] != MAX_DNUM){
-        bio_read(inode_mem->direct_ptr[n], buf);
+        bio_read(superBlock->d_start_blk + inode_mem->direct_ptr[n], buf);
         if((size-s) < BLOCK_SIZE){
             buf = memcpy(buf+mod, buffer+j, (size-s));
-            bio_write(inode_mem->direct_ptr[n], buf);
+            bio_write(superBlock->d_start_blk+inode_mem->direct_ptr[n], buf);
             break;
         }
         else{
                 buf = memcpy(buf+mod, buffer+j, BLOCK_SIZE-mod);
                 s+=BLOCK_SIZE-mod;
                 j = s; 
-                bio_write(inode_mem->direct_ptr[n], buf);
+                bio_write(superBlock->d_start_blk+inode_mem->direct_ptr[n], buf);
                 n++;
             }
             mod = 0;
